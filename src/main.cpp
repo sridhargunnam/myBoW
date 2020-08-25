@@ -1,45 +1,130 @@
-#include <functional>
-#include <iostream>
+#include<iostream>
+#include <string>
+#include <vector>
+#include <algorithm>
+#include <filesystem>
 
-#include <spdlog/spdlog.h>
+#include <opencv2/opencv.hpp>
+#include <opencv2/highgui/highgui.hpp>
+#include <iterator>
 
 
-#include <docopt/docopt.h>
-
-#include <iostream>
-
-static constexpr auto USAGE =
-  R"(Naval Fate.
-
-    Usage:
-          naval_fate ship new <name>...
-          naval_fate ship <name> move <x> <y> [--speed=<kn>]
-          naval_fate ship shoot <x> <y>
-          naval_fate mine (set|remove) <x> <y> [--moored | --drifting]
-          naval_fate (-h | --help)
-          naval_fate --version
- Options:
-          -h --help     Show this screen.
-          --version     Show version.
-          --speed=<kn>  Speed in knots [default: 10].
-          --moored      Moored (anchored) mine.
-          --drifting    Drifting mine.
-)";
-
-int main(int argc, const char **argv)
+typedef std::vector<std::string> stringvec;
+struct path_leaf_string
 {
-  std::map<std::string, docopt::value> args = docopt::docopt(USAGE,
-    { std::next(argv), std::next(argv, argc) },
-    true,// show help if requested
-    "Naval Fate 2.0");// version string
+  std::string operator()(const std::filesystem::directory_entry& entry) const
+  {
+    return entry.path().string();
+  }
+};
 
-  for (auto const &arg : args) {
-    std::cout << arg.first << arg.second << std::endl;
+void read_directory(const std::string& dir_path, stringvec& v)
+{
+  std::filesystem::path p(dir_path);
+  std::filesystem::directory_iterator start(p);
+  std::filesystem::directory_iterator end;
+  std::transform(start, end, std::back_inserter(v), path_leaf_string());
+}
+
+
+const cv::Mat readImage(std::string filename){
+  return cv::imread(filename, cv::IMREAD_COLOR);
+}
+
+void showImage(std::string title, const cv::Mat& input_image){
+  cv::namedWindow(title, cv::WINDOW_AUTOSIZE);
+  cv::imshow(title, input_image);
+  cv::waitKey(0);
+}
+
+// TODO get rid of this
+const std::vector<cv::KeyPoint> computeSIFTKeypoints(const cv::Mat& input_image) {
+  //CV_WRAP static Ptr<SIFT> create(int nfeatures = 0, int nOctaveLayers = 3,
+//                                  double contrastThreshold = 0.04, double edgeThreshold = 10,
+//                                  double sigma = 1.6);
+  auto detector = cv::SIFT::create(100);
+  std::vector<cv::KeyPoint> keypoints;
+  cv::Mat descriptors;
+  detector->detect(input_image, keypoints);
+  detector->compute(input_image, keypoints, descriptors);
+  std::cout << "Descriptors = " << descriptors << "\n";
+  return keypoints;
+}
+
+void addDescriptorsToList(std::vector<cv::Mat> &list_of_descriptors, std::string input_image, const int num_of_descriptor=100){
+  cv::Mat im = cv::imread(input_image);
+  auto detector = cv::SIFT::create(num_of_descriptor);
+  std::vector<cv::KeyPoint> keypoints;
+  cv::Mat descriptors;
+  detector->detect(im, keypoints);
+  detector->compute(im, keypoints, descriptors);
+  //std::cout << "Descriptors = " << descriptors << "\n";
+  list_of_descriptors.push_back(descriptors);
+}
+
+void drawpoints(const cv::Mat& input_image, std::vector<cv::KeyPoint> keypoints, cv::Mat& output_image){
+  cv::drawKeypoints(input_image, keypoints, output_image);
+  //cv::imwrite("sift_result.jpg",output_image);
+}
+
+
+int main(){
+  std::string data_set_dir = "/mnt/data/ws/Evaluation/cv/unio-bonn-cpp/Bag_of_Visual_Words/myRoom/training";
+  stringvec file_list;
+  read_directory(data_set_dir, file_list);
+
+  std::vector<cv::Mat> list_of_descriptors;
+  for(auto f:file_list){
+    addDescriptorsToList(list_of_descriptors, f, 10);
+    std::cout << f << "\n";
+    break;
   }
 
+  auto one_set_of_descriptors = list_of_descriptors[0];
+  std::cout << "total = " << one_set_of_descriptors.total() << "\n";
+  one_set_of_descriptors.convertTo(one_set_of_descriptors, CV_32F);
+  cv::Mat labels;
+  cv::Mat centers;
+//  CV_EXPORTS_W double kmeans( InputArray data, int K, InputOutputArray bestLabels,
+//                              TermCriteria criteria, int attempts,
+//                              int flags, OutputArray centers = noArray() );
+  kmeans(one_set_of_descriptors, 10, labels, cv::TermCriteria(cv::TermCriteria::MAX_ITER+cv::TermCriteria::EPS,
+                                               10, 1.0), 3, cv::KMEANS_PP_CENTERS, centers);
 
-  //Use the default logger (stdout, multi-threaded, colored)
-  spdlog::info("Hello, {}!", "World");
+  std::cout << "\n";
+  /*
 
-  fmt::print("Hello, from {}\n", "{fmt}");
+// convert to float & reshape to a [3 x W*H] Mat
+//  (so every pixel is on a row of it's own)
+Mat data;
+ocv.convertTo(data,CV_32F);
+data = data.reshape(1,data.total());
+
+// do kmeans
+Mat labels, centers;
+kmeans(data, 8, labels, TermCriteria(CV_TERMCRIT_ITER, 10, 1.0), 3,
+       KMEANS_PP_CENTERS, centers);
+
+// reshape both to a single row of Vec3f pixels:
+centers = centers.reshape(3,centers.rows);
+data = data.reshape(3,data.rows);
+
+// replace pixel values with their center value:
+Vec3f *p = data.ptr<Vec3f>();
+for (size_t i=0; i<data.rows; i++) {
+   int center_id = labels.at<int>(i);
+   p[i] = centers.at<Vec3f>(center_id);
+}
+
+// back to 2d, and uchar:
+ocv = data.reshape(3, ocv.rows);
+ocv.convertTo(ocv, CV_8U);
+   */
+
+
+//  std::vector<cv::KeyPoint> keypoints {computeSIFTKeypoints(readImage(file_list[0]))};
+//  cv::Mat output;
+//  drawpoints(readImage(file_list[0]), keypoints,output);
+//  showImage("output", output);
+  return 0;
 }
