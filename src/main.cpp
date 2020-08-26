@@ -32,7 +32,7 @@ const cv::Mat readImage(std::string filename){
 }
 
 void showImage(std::string title, const cv::Mat& input_image){
-  cv::namedWindow(title, cv::WINDOW_AUTOSIZE);
+  cv::namedWindow(title, cv::WINDOW_NORMAL);
   cv::imshow(title, input_image);
   cv::waitKey(0);
 }
@@ -51,80 +51,108 @@ const std::vector<cv::KeyPoint> computeSIFTKeypoints(const cv::Mat& input_image)
   return keypoints;
 }
 
-void addDescriptorsToList(std::vector<cv::Mat> &list_of_descriptors, std::string input_image, const int num_of_descriptor=100){
+void addDescriptorsToList(std::vector<cv::KeyPoint>& list_of_keypoints, std::vector<cv::Mat> &list_of_descriptors, std::string input_image, const int num_of_descriptor=100){
   cv::Mat im = cv::imread(input_image);
-  auto detector = cv::SIFT::create(num_of_descriptor);
+  std::cout << num_of_descriptor << std::endl;
+  auto detector = cv::SIFT::create(); //num_of_descriptor);
   std::vector<cv::KeyPoint> keypoints;
   cv::Mat descriptors;
   detector->detect(im, keypoints);
   detector->compute(im, keypoints, descriptors);
   //std::cout << "Descriptors = " << descriptors << "\n";
   list_of_descriptors.push_back(descriptors);
+  list_of_keypoints.insert(list_of_keypoints.end(), keypoints.begin(), keypoints.end());
 }
 
-void drawpoints(const cv::Mat& input_image, std::vector<cv::KeyPoint> keypoints, cv::Mat& output_image){
-  cv::drawKeypoints(input_image, keypoints, output_image);
-  //cv::imwrite("sift_result.jpg",output_image);
+void drawpoints(cv::Mat& input_image, std::vector<cv::KeyPoint> keypoints, cv::Mat& output_image,  //{
+                const cv::Scalar color = cv::Scalar::all(-1) ) {
+    cv::drawKeypoints(input_image, keypoints, output_image, color, cv::DrawMatchesFlags::DRAW_RICH_KEYPOINTS);
+    //cv::imwrite("sift_result.jpg",output_image);
 }
 
 
 int main(){
-  std::string data_set_dir = "/mnt/data/ws/Evaluation/cv/unio-bonn-cpp/Bag_of_Visual_Words/myRoom/training";
+  std::string data_set_dir = "/mnt/data/ws/Evaluation/cv/unio-bonn-cpp/Bag_of_Visual_Words/myRoom/training";  // /home/srigun/Pictures/sift/star" ; //
   stringvec file_list;
   read_directory(data_set_dir, file_list);
 
   std::vector<cv::Mat> list_of_descriptors;
+  std::vector<cv::KeyPoint> list_of_keypoints;
   for(auto f:file_list){
-    addDescriptorsToList(list_of_descriptors, f, 10);
+    addDescriptorsToList(list_of_keypoints,list_of_descriptors, f);
     std::cout << f << "\n";
     break;
   }
 
-  auto one_set_of_descriptors = list_of_descriptors[0];
-  std::cout << "total = " << one_set_of_descriptors.total() << "\n";
-  one_set_of_descriptors.convertTo(one_set_of_descriptors, CV_32F);
+  cv::Mat all_descriptors;
+  for(auto i:list_of_descriptors){
+    all_descriptors.push_back(i);
+    //std::cout << i << "\n";
+    break;
+  }
+
+  std::cout << "total = " << all_descriptors.total() << "\n";
+  all_descriptors.convertTo(all_descriptors, CV_32F);
   cv::Mat labels;
   cv::Mat centers;
-//  CV_EXPORTS_W double kmeans( InputArray data, int K, InputOutputArray bestLabels,
-//                              TermCriteria criteria, int attempts,
-//                              int flags, OutputArray centers = noArray() );
-  kmeans(one_set_of_descriptors, 10, labels, cv::TermCriteria(cv::TermCriteria::MAX_ITER+cv::TermCriteria::EPS,
+
+  kmeans(all_descriptors, 6, labels, cv::TermCriteria(cv::TermCriteria::MAX_ITER+cv::TermCriteria::EPS,
                                                10, 1.0), 3, cv::KMEANS_PP_CENTERS, centers);
-
   std::cout << "\n";
-  /*
+  std::vector<int> flattened_labels(labels.begin<int>(), labels.end<int>());
 
-// convert to float & reshape to a [3 x W*H] Mat
-//  (so every pixel is on a row of it's own)
-Mat data;
-ocv.convertTo(data,CV_32F);
-data = data.reshape(1,data.total());
+  cv::Mat input_image = cv::imread(file_list[0]);
+  int counter = 0;
+//  cv::Mat output_image;
+//  drawpoints(input_image, list_of_keypoints, output_image, cv::Scalar( 255, 10, 10 ));
+//  //showImage("viola", output_image);
+//  cv::imwrite("all_keys.jpg",output_image);
+//
+//  return 0;
+  for(auto l:flattened_labels) {
+    switch (l) {
+      case 0: {
+        drawpoints(input_image, { list_of_keypoints[static_cast<unsigned long>(counter)] }, input_image, cv::Scalar( 255, 10, 10 ));
+        counter++;
+        break;
+      }
+      case 1:{
+        drawpoints(input_image, { list_of_keypoints[static_cast<unsigned long>(counter)] }, input_image, cv::Scalar( 10, 255, 10 ));
+        counter++;
+        break;
+      }
+      case 2: {
+        drawpoints(input_image, { list_of_keypoints[static_cast<unsigned long>(counter)] }, input_image, cv::Scalar( 10, 10, 255 ));
+        counter++;
+        break;
+      }
+    case 3: {
+      drawpoints(input_image, { list_of_keypoints[static_cast<unsigned long>(counter)] }, input_image, cv::Scalar( 255, 255, 10 ));
+      counter++;
+      break;
+    }
 
-// do kmeans
-Mat labels, centers;
-kmeans(data, 8, labels, TermCriteria(CV_TERMCRIT_ITER, 10, 1.0), 3,
-       KMEANS_PP_CENTERS, centers);
+    case 4: {
+      drawpoints(input_image, { list_of_keypoints[static_cast<unsigned long>(counter)] }, input_image, cv::Scalar( 255, 10, 255 ));
+      counter++;
+      break;
+    }
+    case 5: {
+      drawpoints(input_image, { list_of_keypoints[static_cast<unsigned long>(counter)] }, input_image, cv::Scalar( 10, 255, 255 ));
+      counter++;
+      break;
+    }
+    default: {
+      std::cout << "I am in default. Shouldn't be here at label = " << l << "\n";
+      drawpoints(input_image, { list_of_keypoints[static_cast<unsigned long>(counter)] }, input_image, cv::Scalar( 1, 1, 1 ));
+      counter++;
+      break;
+    }
+    }
+  }
 
-// reshape both to a single row of Vec3f pixels:
-centers = centers.reshape(3,centers.rows);
-data = data.reshape(3,data.rows);
+    showImage("viola", input_image);
+    cv::imwrite("all_keys.jpg",input_image);
 
-// replace pixel values with their center value:
-Vec3f *p = data.ptr<Vec3f>();
-for (size_t i=0; i<data.rows; i++) {
-   int center_id = labels.at<int>(i);
-   p[i] = centers.at<Vec3f>(center_id);
-}
-
-// back to 2d, and uchar:
-ocv = data.reshape(3, ocv.rows);
-ocv.convertTo(ocv, CV_8U);
-   */
-
-
-//  std::vector<cv::KeyPoint> keypoints {computeSIFTKeypoints(readImage(file_list[0]))};
-//  cv::Mat output;
-//  drawpoints(readImage(file_list[0]), keypoints,output);
-//  showImage("output", output);
   return 0;
 }

@@ -51,16 +51,10 @@ add_executable(intro
 target_link_libraries(intro
   PRIVATE project_options
           project_warnings
-          CONAN_PKG::docopt.cpp
-          CONAN_PKG::fmt
-          CONAN_PKG::spdlog
           ${OpenCV_LIBS}
           gtest
           gmock
-          benchmark::benchmark
-          ${realsense_INCLUDE_DIR}
-          ${Python3_INCLUDE_DIRS}
-          ${Python3_NumPy_INCLUDE_DIRS})
+          benchmark::benchmark)
 
 # Experimental corner detection and descriptor
 add_subdirectory(experimental)

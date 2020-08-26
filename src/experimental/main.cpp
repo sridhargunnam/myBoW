@@ -1,85 +1,76 @@
 #include<iostream>
 #include <string>
-#include <filesystem>
 #include <vector>
-#include <algorithm>
-#include <iterator>
-
 #include <opencv2/opencv.hpp>
 #include <opencv2/highgui/highgui.hpp>
-
-const cv::Mat readImage(std::string filename){
-  return cv::imread(filename, cv::IMREAD_COLOR);
-}
-
-void showImage(std::string title, const cv::Mat& input_image){
-  cv::namedWindow(title, cv::WINDOW_NORMAL);
-  cv::imshow(title, input_image);
-  cv::waitKey(0);
-}
+#include <opencv2/features2d.hpp>
 
 
-typedef std::vector<std::string> stringvec;
-struct path_leaf_string
-{
-  std::string operator()(const std::filesystem::directory_entry& entry) const
-  {
-    return entry.path().string();
-  }
-};
+#include "customFilter.h"
+#include "fileReader.h"
+#include "ImageHelper.h"
 
-void read_directory(const std::string& name, stringvec& v)
-{
-  std::filesystem::path p(name);
-  std::filesystem::directory_iterator start(p);
-  std::filesystem::directory_iterator end;
-  std::transform(start, end, std::back_inserter(v), path_leaf_string());
-}
-
-int customFilter(const std::string filename){
-  // Declare variables
-  cv::Mat src, dst;
-  const char* window_name = "filter2D Demo";;
-  // Loads an image
-  src = imread( cv::samples::findFile( filename ), cv::IMREAD_COLOR ); // Load an image
-  if( src.empty() )
-  {
-    printf(" Error opening image\n");
-    return EXIT_FAILURE;
-  }
-  // Initialize arguments for the filter
-  cv::Mat kernel;
-  cv::Point anchor = cv::Point( -1, -1 );
-  double delta = 0;
-  int ddepth = -1;
-  // Loop - Will filter the image with different kernel sizes each 0.5 seconds
-  int ind = 0;
-  for(;;)
-  {
-    int kernel_size;
-    // Update kernel size for a normalized box filter
-    kernel_size = 3 + 2*( ind%5 );
-    kernel = cv::Mat::ones( kernel_size, kernel_size, CV_32F )/ (kernel_size*kernel_size);
-    // Apply filter
-    cv::filter2D(src, dst, ddepth , kernel, anchor, delta, cv::BORDER_DEFAULT );
-    imshow( window_name, dst );
-    char c = static_cast<char>(cv::waitKey(500));
-    // Press 'ESC' to exit the program
-    if( c == 27 )
-    { break; }
-    ind++;
-  }
-  return EXIT_SUCCESS;
-}
 int main(){
-  std::string dir_path{"/mnt/data/ws/Evaluation/cv/unio-bonn-cpp/Bag_of_Visual_Words/myRoom"};
-  stringvec v;
-  read_directory(dir_path, v);
-  for(auto i:v){
-    showImage(i, readImage(i));
-    customFilter(i);
+  std::string data_set_dir = "/mnt/data/ws/Evaluation/cv/unio-bonn-cpp/Bag_of_Visual_Words/myRoom/training";
+  stringvec file_list;
+  read_directory(data_set_dir, file_list);
+
+  std::vector<cv::Mat> list_of_descriptors;
+  for(auto f:file_list){
+    addDescriptorsToList(list_of_descriptors, f, 10);
+    std::cout << f << "\n";
     break;
   }
 
+  auto one_set_of_descriptors = list_of_descriptors[0];
+  std::cout << "total = " << one_set_of_descriptors.total() << "\n";
+  one_set_of_descriptors.convertTo(one_set_of_descriptors, CV_32F);
+  cv::Mat labels;
+  cv::Mat centers;
+  cv::kmeans(one_set_of_descriptors, 10, labels, cv::TermCriteria(cv::TermCriteria::MAX_ITER+cv::TermCriteria::EPS,
+                                                              10, 1.0), 3, cv::KMEANS_PP_CENTERS, centers);
+  cv::BOWKMeansTrainer(10,cv::TermCriteria(cv::TermCriteria::MAX_ITER+cv::TermCriteria::EPS,
+                                                             10, 1.0), 3,cv::KMEANS_PP_CENTERS);
+  std::cout << "\n";
+  /*
+
+// convert to float & reshape to a [3 x W*H] Mat
+//  (so every pixel is on a row of it's own)
+Mat data;
+ocv.convertTo(data,CV_32F);
+data = data.reshape(1,data.total());
+
+// do kmeans
+Mat labels, centers;
+kmeans(data, 8, labels, TermCriteria(CV_TERMCRIT_ITER, 10, 1.0), 3,
+       KMEANS_PP_CENTERS, centers);
+
+// reshape both to a single row of Vec3f pixels:
+centers = centers.reshape(3,centers.rows);
+data = data.reshape(3,data.rows);
+
+// replace pixel values with their center value:
+Vec3f *p = data.ptr<Vec3f>();
+for (size_t i=0; i<data.rows; i++) {
+   int center_id = labels.at<int>(i);
+   p[i] = centers.at<Vec3f>(center_id);
+}
+*/
+
   return 0;
 }
+
+
+
+
+
+
+
+
+
+
+
+
+// TODO
+// check out the tests for kmeans in opencv library, but give an attempt before checking it out
+// https://github.com/opencv/opencv/blob/01a28db949e96e7c23cf618e5c83866e4f9b6f02/modules/ml/test/test_kmeans.cpp
