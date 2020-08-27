@@ -39,9 +39,6 @@ void showImage(std::string title, const cv::Mat& input_image){
 
 // TODO get rid of this
 const std::vector<cv::KeyPoint> computeSIFTKeypoints(const cv::Mat& input_image) {
-  //CV_WRAP static Ptr<SIFT> create(int nfeatures = 0, int nOctaveLayers = 3,
-//                                  double contrastThreshold = 0.04, double edgeThreshold = 10,
-//                                  double sigma = 1.6);
   auto detector = cv::SIFT::create(100);
   std::vector<cv::KeyPoint> keypoints;
   cv::Mat descriptors;
@@ -69,7 +66,29 @@ void drawpoints(cv::Mat& input_image, std::vector<cv::KeyPoint> keypoints, cv::M
     cv::drawKeypoints(input_image, keypoints, output_image, color, cv::DrawMatchesFlags::DRAW_RICH_KEYPOINTS);
     //cv::imwrite("sift_result.jpg",output_image);
 }
-
+//
+//void drawHist(const std::vector<int>& data, cv::Mat3b& dst, std::size_t binSize = 1, std::size_t height = 0)
+//{
+//  auto max_value = *(std::max(data.begin(), data.end()));
+//  std::size_t rows = 0;
+//  std::size_t cols = 0;
+//  if (height == 0) {
+//    rows = static_cast<size_t>(max_value + 10);
+//  } else {
+//    rows = (std::max(static_cast<size_t>(max_value + 10), height));
+//  }
+//
+//  cols = data.size() * binSize;
+//
+//  dst = cv::Mat(rows, cols, cv::Vec3b(0,0,0));
+//
+//  for (int i = 0; i < data.size(); ++i)
+//  {
+//    int h = rows - data[i];
+//    rectangle(dst, Point(i*binSize, h), Point((i + 1)*binSize-1, rows), (i%2) ? Scalar(0, 100, 255) : Scalar(0, 0, 255), CV_FILLED);
+//  }
+//
+//}
 
 int main(){
   std::string data_set_dir = "/mnt/data/ws/Evaluation/cv/unio-bonn-cpp/Bag_of_Visual_Words/myRoom/training";  // /home/srigun/Pictures/sift/star" ; //
@@ -95,64 +114,78 @@ int main(){
   all_descriptors.convertTo(all_descriptors, CV_32F);
   cv::Mat labels;
   cv::Mat centers;
-
-  kmeans(all_descriptors, 6, labels, cv::TermCriteria(cv::TermCriteria::MAX_ITER+cv::TermCriteria::EPS,
+  const int kCentroids = 6;
+  kmeans(all_descriptors, kCentroids, labels, cv::TermCriteria(cv::TermCriteria::MAX_ITER+cv::TermCriteria::EPS,
                                                10, 1.0), 3, cv::KMEANS_PP_CENTERS, centers);
   std::cout << "\n";
   std::vector<int> flattened_labels(labels.begin<int>(), labels.end<int>());
 
   cv::Mat input_image = cv::imread(file_list[0]);
   int counter = 0;
+
 //  cv::Mat output_image;
 //  drawpoints(input_image, list_of_keypoints, output_image, cv::Scalar( 255, 10, 10 ));
 //  //showImage("viola", output_image);
 //  cv::imwrite("all_keys.jpg",output_image);
-//
 //  return 0;
+
+  std::vector<int> hist(kCentroids);
   for(auto l:flattened_labels) {
     switch (l) {
       case 0: {
         drawpoints(input_image, { list_of_keypoints[static_cast<unsigned long>(counter)] }, input_image, cv::Scalar( 255, 10, 10 ));
-        counter++;
-        break;
+        ++counter;
+        ++hist[static_cast<unsigned long>(l)];
       }
+        break;
       case 1:{
         drawpoints(input_image, { list_of_keypoints[static_cast<unsigned long>(counter)] }, input_image, cv::Scalar( 10, 255, 10 ));
-        counter++;
-        break;
+        ++counter;
+        ++hist[static_cast<unsigned long>(l)];
       }
+        break;
       case 2: {
         drawpoints(input_image, { list_of_keypoints[static_cast<unsigned long>(counter)] }, input_image, cv::Scalar( 10, 10, 255 ));
-        counter++;
-        break;
+        ++counter;
+        ++hist[static_cast<unsigned long>(l)];
       }
+        break;
     case 3: {
       drawpoints(input_image, { list_of_keypoints[static_cast<unsigned long>(counter)] }, input_image, cv::Scalar( 255, 255, 10 ));
-      counter++;
-      break;
+      ++counter;
+      ++hist[static_cast<unsigned long>(l)];
     }
-
+        break;
     case 4: {
       drawpoints(input_image, { list_of_keypoints[static_cast<unsigned long>(counter)] }, input_image, cv::Scalar( 255, 10, 255 ));
-      counter++;
-      break;
+      ++counter;
+      ++hist[static_cast<unsigned long>(l)];
     }
+      break;
     case 5: {
       drawpoints(input_image, { list_of_keypoints[static_cast<unsigned long>(counter)] }, input_image, cv::Scalar( 10, 255, 255 ));
-      counter++;
-      break;
+      ++counter;
+      ++hist[static_cast<unsigned long>(l)];
     }
+      break;
     default: {
       std::cout << "I am in default. Shouldn't be here at label = " << l << "\n";
       drawpoints(input_image, { list_of_keypoints[static_cast<unsigned long>(counter)] }, input_image, cv::Scalar( 1, 1, 1 ));
-      counter++;
-      break;
+      ++counter;
+      ++hist[static_cast<unsigned long>(l)];
     }
+      break;
     }
   }
 
-    showImage("viola", input_image);
-    cv::imwrite("all_keys.jpg",input_image);
+  std::cout << "histogram here\n";
+  for(auto h:hist){
+    std::cout << h << ", " ;
+  }
+  std::cout << "\n";
+
+//  showImage("viola", input_image);
+//    cv::imwrite("all_keys.jpg",input_image);
 
   return 0;
 }
