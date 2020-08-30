@@ -8,3 +8,12 @@ target_link_libraries(experimental
         PRIVATE project_options
         project_warnings
         ${OpenCV_LIBS})
+
+add_executable(fileStorage1 fileStorage.cpp)
+target_link_libraries(fileStorage1
+        PRIVATE project_options
+        project_warnings
+        ${OpenCV_LIBS}
+        gtest
+        gmock
+        benchmark::benchmark)

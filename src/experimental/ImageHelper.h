@@ -17,14 +17,14 @@ const cv::Mat readImage(std::string filename){
   return cv::imread(filename, cv::IMREAD_COLOR);
 }
 
-void showImage(std::string title, const cv::Mat& input_image){
+void ShowImage(std::string title, const cv::Mat& input_image){
   cv::namedWindow(title, cv::WINDOW_AUTOSIZE);
   cv::imshow(title, input_image);
   cv::waitKey(0);
 }
 
 // TODO get rid of this
-const std::vector<cv::KeyPoint> computeSIFTKeypoints(const cv::Mat& input_image) {
+const std::vector<cv::KeyPoint> ComputeSiftKeypoints(const cv::Mat& input_image) {
   //CV_WRAP static Ptr<SIFT> create(int nfeatures = 0, int nOctaveLayers = 3,
 //                                  double contrastThreshold = 0.04, double edgeThreshold = 10,
 //                                  double sigma = 1.6);
@@ -36,10 +36,10 @@ const std::vector<cv::KeyPoint> computeSIFTKeypoints(const cv::Mat& input_image)
   std::cout << "Descriptors = " << descriptors << "\n";
   return keypoints;
 /*
-  std::vector<cv::KeyPoint> keypoints {computeSIFTKeypoints(readImage(file_list[0]))};
+  std::vector<cv::KeyPoint> keypoints {ComputeSiftKeypoints(readImage(file_list[0]))};
   cv::Mat output;
-  drawpoints(readImage(file_list[0]), keypoints,output);
-  showImage("output", output);
+  Drawpoints(readImage(file_list[0]), keypoints,output);
+  ShowImage("output", output);
   */
 }
 
