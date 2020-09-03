@@ -148,6 +148,12 @@ void SaveToFile(std::string filename, T item){
   fs << "item" << item;
 }
 
+template<typename T>
+void LoadFromFile(std::string filename, T item){
+  cv::FileStorage fs(filename, cv::FileStorage::READ);
+  fs["item"] >> item;
+}
+
 void ProcessInputs( const std::string& data_set_dir,  const bool read_images,
                     std::vector<cv::Mat>& list_of_descriptors, std::vector<cv::KeyPoint>& list_of_keypoints,
                     stringvec& file_list)
@@ -221,90 +227,148 @@ void CheckCurrentHistogramCount(std::vector<T>& current_image_hist, const int& t
 int main(int ac, char** av){
   // read_images_from_disk  enable_debug_write_image
   // false        true
-  cv::CommandLineParser parser(ac, av,"{@read_images||}{@enable_debug_write_images||}{@use_saved_labels_centers_hists}");
+  cv::CommandLineParser parser(ac, av,"{@read_images||}{@enable_debug_write_images||}{@use_saved_labels_centers_hists||}");
   auto read_images                    = parser.get<bool>("@read_images");
   bool enable_debug_write_images      = parser.get<bool>("@enable_debug_write_images");
   bool use_saved_labels_centers_hists = parser.get<bool>( "@use_saved_labels_centers_hists");
 
-  /*
+  std::vector<std::vector<int>> all_hists;
+  std::vector<std::vector<double>> all_hists_normalized;
+  cv::Mat labels;
+  cv::Mat centers;
+  std::vector<cv::Mat> list_of_descriptors;
+  std::vector<cv::KeyPoint> list_of_keypoints;
+  std::string fname_centers = "/mnt/data/ws/Evaluation/cv/unio-bonn-cpp/Bag_of_Visual_Words/save_dir/centers.yml.gz";
+  std::string fname_labels = "/mnt/data/ws/Evaluation/cv/unio-bonn-cpp/Bag_of_Visual_Words/save_dir/labels.yml.gz";
+  std::string fname_hists = "/mnt/data/ws/Evaluation/cv/unio-bonn-cpp/Bag_of_Visual_Words/save_dir/hists.yml.gz";
+  std::string fname_norm_hists = "/mnt/data/ws/Evaluation/cv/unio-bonn-cpp/Bag_of_Visual_Words/save_dir/norm_hists.yml.gz";
+
+  if(!use_saved_labels_centers_hists){
+    /*
    * Reading the training data set and finding the descriptors and keypoints and writing them to file.
    * If the Keypoints and descriptors already exist, and if the read_option is "read_images" is false, then will read the
    * descriptors and keypoints from the previously generated results.
    */
-  std::string data_set_dir = "/mnt/data/ws/Evaluation/cv/unio-bonn-cpp/Bag_of_Visual_Words/myRoom/training";
-  std::vector<cv::Mat> list_of_descriptors;
-  std::vector<cv::KeyPoint> list_of_keypoints;
-  stringvec file_list;
-  ProcessInputs(data_set_dir, read_images, list_of_descriptors, list_of_keypoints, file_list);
+    std::string data_set_dir = "/mnt/data/ws/Evaluation/cv/unio-bonn-cpp/Bag_of_Visual_Words/myRoom/training";
 
-  cv::Mat all_descriptors;
-  for (auto i : list_of_descriptors) {
-    all_descriptors.push_back(i);
-  }
+    stringvec file_list;
+    ProcessInputs(data_set_dir, read_images, list_of_descriptors, list_of_keypoints, file_list);
 
-  all_descriptors.convertTo(all_descriptors, CV_32F);
-  cv::Mat labels;
-  cv::Mat centers;
-  const int kCentroids = 6;
-  kmeans(all_descriptors, kCentroids, labels, cv::TermCriteria(cv::TermCriteria::MAX_ITER + cv::TermCriteria::EPS, 10, 1), 3, cv::KMEANS_PP_CENTERS, centers);
-  std::vector<int> flattened_labels(labels.begin<int>(), labels.end<int>());
-
-  std::vector<std::vector<int>> all_hists;
-  std::vector<std::vector<double>> all_hists_normalized;
-  auto colors = PopulateColors(kCentroids);
-
-  auto label_iterator_start = flattened_labels.begin();
-  auto label_iterator_end = flattened_labels.begin();
-  auto keypoint_index = 0ul;
-  auto current_image_desc_iter = list_of_descriptors.begin();
-
-  for (auto file :file_list) {
-    std::cout << "Generating histograms and debug images for image " << file << "\n";
-    auto total_desc_in_image = (*current_image_desc_iter).rows;
-    std::advance(current_image_desc_iter,1);
-    std::advance(label_iterator_end, total_desc_in_image);
-
-    std::vector<int> current_image_hist(kCentroids);
-    cv::Mat image = cv::imread(file);
-
-    while(std::distance(label_iterator_start, label_iterator_end) > 0){
-      //if (keypoint_index == static_cast<unsigned long>(total_desc_in_image)) {break;}
-      auto idx = static_cast<std::size_t>(*label_iterator_start);
-      std::advance(label_iterator_start,1);
-      ++current_image_hist[idx];
-      if(enable_debug_write_images) { DrawKeyPoints(image, list_of_keypoints, keypoint_index, colors[idx]);}
-      ++keypoint_index;
+    cv::Mat all_descriptors;
+    for (auto i : list_of_descriptors) {
+      all_descriptors.push_back(i);
     }
-    if(enable_debug_write_images) { WriteDebugImage(file, image);}
-    std::vector<double> current_image_normalized_hist;
-    for(auto bin:current_image_hist){
-      current_image_normalized_hist.push_back( static_cast<double>(bin) / total_desc_in_image);
+
+    all_descriptors.convertTo(all_descriptors, CV_32F);
+
+    const int kCentroids = 100;
+    kmeans(all_descriptors, kCentroids, labels, cv::TermCriteria(cv::TermCriteria::MAX_ITER + cv::TermCriteria::EPS, 10, 1), 3, cv::KMEANS_PP_CENTERS, centers);
+    std::vector<int> flattened_labels(labels.begin<int>(), labels.end<int>());
+
+
+    auto colors = PopulateColors(kCentroids);
+
+    auto label_iterator_start = flattened_labels.begin();
+    auto label_iterator_end = flattened_labels.begin();
+    auto keypoint_index = 0ul;
+    auto current_image_desc_iter = list_of_descriptors.begin();
+
+    for (auto file : file_list) {
+      std::cout << "Generating histograms and debug images for image " << file << "\n";
+      auto total_desc_in_image = (*current_image_desc_iter).rows;
+      std::advance(current_image_desc_iter, 1);
+      std::advance(label_iterator_end, total_desc_in_image);
+
+      std::vector<double> current_image_normalized_hist;
+      std::vector<int> current_image_hist(kCentroids);
+      cv::Mat image = cv::imread(file);
+
+      while (std::distance(label_iterator_start, label_iterator_end) > 0) {
+        //if (keypoint_index == static_cast<unsigned long>(total_desc_in_image)) {break;}
+        auto idx = static_cast<std::size_t>(*label_iterator_start);
+        std::advance(label_iterator_start, 1);
+        ++current_image_hist[idx];
+        if (enable_debug_write_images) { DrawKeyPoints(image, list_of_keypoints, keypoint_index, colors[idx]); }
+        ++keypoint_index;
+      }
+      if (enable_debug_write_images) { WriteDebugImage(file, image); }
+
+      for (auto bin : current_image_hist) {
+        current_image_normalized_hist.push_back(static_cast<double>(bin) / total_desc_in_image);
+      }
+      all_hists_normalized.push_back(current_image_normalized_hist);
+      all_hists.push_back(current_image_hist);
+      //CheckCurrentHistogramCount<int>(current_image_hist, total_desc_in_image);
+      CheckCurrentHistogramCount<double>(current_image_normalized_hist, total_desc_in_image);
     }
-    all_hists_normalized.push_back(current_image_normalized_hist);
-    all_hists.push_back(current_image_hist);
-    //CheckCurrentHistogramCount<int>(current_image_hist, total_desc_in_image);
-    CheckCurrentHistogramCount<double>(current_image_normalized_hist, total_desc_in_image);
 
-  }
+    // TFIDF
+    for (auto hist : all_hists_normalized) {
+      //std::sort(hist.begin(), hist.end());
+      auto mean = std::accumulate(hist.begin(), hist.end(), 0.0) / static_cast<double>(hist.size());
+      std::cout << "Mean:" << mean << std::endl;
+      CheckCurrentHistogramCount<double>(hist, 1);
+    }
 
-//  // Save all the centroids and histograms
-//  std::string fname_centers = "/mnt/data/ws/Evaluation/cv/unio-bonn-cpp/Bag_of_Visual_Words/save_dir/centers.yml.gz";
-//  SaveToFile(fname_centers, centers );
-//  std::string fname_labels = "/mnt/data/ws/Evaluation/cv/unio-bonn-cpp/Bag_of_Visual_Words/save_dir/labels.yml.gz";
-//  SaveToFile(fname_labels, labels );
-//  std::string fname_hists = "/mnt/data/ws/Evaluation/cv/unio-bonn-cpp/Bag_of_Visual_Words/save_dir/hists.yml.gz";
-//  SaveToFile(fname_hists, all_hists );
-  // Normalize to 1
+    /*
+      (n*(n-1))/(2) diffs
+      compare to threshold t = 0.001
+      if(diff lesser than threshold]
+         count plus 1
+         print count
+      */
 
-//  // TFIDF
-//  for( auto hist:all_hists_normalized) {
-//    std::sort(hist.begin(), hist.end());
-//    auto mean = std::accumulate(hist.begin(), hist.end(), 0.0)/ static_cast<double>(hist.size());
-//    std::cout << "Mean:" << mean << std::endl;
-//    CheckCurrentHistogramCount<double>(hist, 1);
-//  }
-  // Distance - MSE
+    std::vector<int> countDiffsAboveThresholdVec;
+    for(int c=0; c<kCentroids; c++){
+      std::vector<double> diffs;
+      //diffs.reserve(kCentroids*(kCentroids-1)/2);
+      std::vector<double> items;
+      for(auto h:all_hists_normalized){
+        items.push_back(h[c]);
+      }
 
-  return 0;
+      for(int j=0; j<(file_list.size()-1); j++){
+        for(int k=(j+1); k < file_list.size(); k++){
+          diffs.push_back(std::abs(items[j] - items[k]));
+        }
+      }
+
+      int countDiffsAboveThreshold = 0;
+      double threshold = 0.001;
+//      std::count_if(diffs.begin(), diffs.end(), )
+      for(auto d:diffs){
+        if(d > threshold)
+          countDiffsAboveThreshold += 1;
+      }
+
+      countDiffsAboveThresholdVec.push_back(countDiffsAboveThreshold);
+
+      std::cout << "Total N(number of images) = " << file_list.size() << " ni(number of occurrences) = " <<  countDiffsAboveThreshold << std::endl;
+
+    }
+
+    std::cout << "countDiffsAboveThresholdVec \n";
+    std::sort(countDiffsAboveThresholdVec.begin(), countDiffsAboveThresholdVec.end());
+    for(auto i:countDiffsAboveThresholdVec){
+      std::cout << i << ", ";
+    }
+    std::cout << "\n";
+    // Save all the centroids and histograms
+      SaveToFile(fname_centers, centers );
+      SaveToFile(fname_labels, labels );
+      SaveToFile(fname_hists, all_hists );
+      SaveToFile(fname_norm_hists, all_hists_normalized);
+
+
+
+    } else {
+    // Save all the centroids and histograms
+      LoadFromFile(fname_labels, labels );
+      LoadFromFile(fname_hists, all_hists );
+      LoadFromFile(fname_centers, centers );
+      LoadFromFile(fname_norm_hists, all_hists_normalized);
+    }
+
+    return 0;
 }
 
