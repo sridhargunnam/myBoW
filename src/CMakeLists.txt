@@ -42,19 +42,23 @@ if(CPP_STARTER_USE_NANA)
 endif()
 
 
+
 ########################## Non-standard way of adding dependencies, i.e without conan #################
 include(opencv.cmake)
 
+# Experimental corner detection and descriptor
+add_subdirectory(experimental)
+
 # Generic test that uses conan libs
 add_executable(intro
-        main.cpp experimental/Stats.cpp experimental/Stats.h)
+        main.cpp)
+target_include_directories(intro PRIVATE experimental)
 target_link_libraries(intro
-  PRIVATE project_options
+  PRIVATE bowStats
+          project_options
           project_warnings
           ${OpenCV_LIBS}
           gtest
           gmock
           benchmark::benchmark)
 
-# Experimental corner detection and descriptor
-add_subdirectory(experimental)

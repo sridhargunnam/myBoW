@@ -337,8 +337,7 @@ int main(int ac, char** av){
       LoadFromFile(fname_norm_hists, all_hists_normalized);
     }
 
-    Stats stats{all_hists_normalized};
-    stats.ComputeStats();
+    Stats<double> stats{all_hists_normalized};
     return 0;
     /*
   std::vector<int> countDiffsAboveThresholdVec;
