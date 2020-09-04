@@ -9,6 +9,8 @@
 #include <opencv2/plot.hpp>
 #include <opencv2/core.hpp> // FileStorage
 
+#include "experimental/Stats.h"
+
 
 #include <iterator>
 #include <numeric>
@@ -149,7 +151,7 @@ void SaveToFile(std::string filename, T item){
 }
 
 template<typename T>
-void LoadFromFile(std::string filename, T item){
+void LoadFromFile(std::string filename, T& item){
   cv::FileStorage fs(filename, cv::FileStorage::READ);
   fs["item"] >> item;
 }
@@ -232,12 +234,15 @@ int main(int ac, char** av){
   bool enable_debug_write_images      = parser.get<bool>("@enable_debug_write_images");
   bool use_saved_labels_centers_hists = parser.get<bool>( "@use_saved_labels_centers_hists");
 
-  std::vector<std::vector<int>> all_hists;
-  std::vector<std::vector<double>> all_hists_normalized;
-  cv::Mat labels;
-  cv::Mat centers;
+  stringvec file_list;
   std::vector<cv::Mat> list_of_descriptors;
   std::vector<cv::KeyPoint> list_of_keypoints;
+
+  std::vector<std::vector<int>> all_hists;
+  std::vector<std::vector<double>> all_hists_normalized;
+  const int kCentroids = 100;
+  cv::Mat labels;
+  cv::Mat centers;
   std::string fname_centers = "/mnt/data/ws/Evaluation/cv/unio-bonn-cpp/Bag_of_Visual_Words/save_dir/centers.yml.gz";
   std::string fname_labels = "/mnt/data/ws/Evaluation/cv/unio-bonn-cpp/Bag_of_Visual_Words/save_dir/labels.yml.gz";
   std::string fname_hists = "/mnt/data/ws/Evaluation/cv/unio-bonn-cpp/Bag_of_Visual_Words/save_dir/hists.yml.gz";
@@ -251,7 +256,6 @@ int main(int ac, char** av){
    */
     std::string data_set_dir = "/mnt/data/ws/Evaluation/cv/unio-bonn-cpp/Bag_of_Visual_Words/myRoom/training";
 
-    stringvec file_list;
     ProcessInputs(data_set_dir, read_images, list_of_descriptors, list_of_keypoints, file_list);
 
     cv::Mat all_descriptors;
@@ -261,7 +265,6 @@ int main(int ac, char** av){
 
     all_descriptors.convertTo(all_descriptors, CV_32F);
 
-    const int kCentroids = 100;
     kmeans(all_descriptors, kCentroids, labels, cv::TermCriteria(cv::TermCriteria::MAX_ITER + cv::TermCriteria::EPS, 10, 1), 3, cv::KMEANS_PP_CENTERS, centers);
     std::vector<int> flattened_labels(labels.begin<int>(), labels.end<int>());
 
@@ -318,41 +321,6 @@ int main(int ac, char** av){
          print count
       */
 
-    std::vector<int> countDiffsAboveThresholdVec;
-    for(int c=0; c<kCentroids; c++){
-      std::vector<double> diffs;
-      //diffs.reserve(kCentroids*(kCentroids-1)/2);
-      std::vector<double> items;
-      for(auto h:all_hists_normalized){
-        items.push_back(h[c]);
-      }
-
-      for(int j=0; j<(file_list.size()-1); j++){
-        for(int k=(j+1); k < file_list.size(); k++){
-          diffs.push_back(std::abs(items[j] - items[k]));
-        }
-      }
-
-      int countDiffsAboveThreshold = 0;
-      double threshold = 0.001;
-//      std::count_if(diffs.begin(), diffs.end(), )
-      for(auto d:diffs){
-        if(d > threshold)
-          countDiffsAboveThreshold += 1;
-      }
-
-      countDiffsAboveThresholdVec.push_back(countDiffsAboveThreshold);
-
-      std::cout << "Total N(number of images) = " << file_list.size() << " ni(number of occurrences) = " <<  countDiffsAboveThreshold << std::endl;
-
-    }
-
-    std::cout << "countDiffsAboveThresholdVec \n";
-    std::sort(countDiffsAboveThresholdVec.begin(), countDiffsAboveThresholdVec.end());
-    for(auto i:countDiffsAboveThresholdVec){
-      std::cout << i << ", ";
-    }
-    std::cout << "\n";
     // Save all the centroids and histograms
       SaveToFile(fname_centers, centers );
       SaveToFile(fname_labels, labels );
@@ -363,12 +331,47 @@ int main(int ac, char** av){
 
     } else {
     // Save all the centroids and histograms
-      LoadFromFile(fname_labels, labels );
-      LoadFromFile(fname_hists, all_hists );
-      LoadFromFile(fname_centers, centers );
+//      LoadFromFile(fname_labels, labels );
+//      LoadFromFile(fname_hists, all_hists );
+//      LoadFromFile(fname_centers, centers );
       LoadFromFile(fname_norm_hists, all_hists_normalized);
     }
 
+    Stats stats{all_hists_normalized};
+    stats.ComputeStats();
     return 0;
+    /*
+  std::vector<int> countDiffsAboveThresholdVec;
+  for(int c=0; c<kCentroids; c++){
+    std::vector<double> diffs;
+    //diffs.reserve(kCentroids*(kCentroids-1)/2);
+    std::vector<double> items;
+    for(auto h:all_hists_normalized){
+      items.push_back(h[c]);
+    }
+
+    for(int j=0; j<(15-1); j++){
+      for(int k=(j+1); k < 15; k++){
+        diffs.push_back(std::abs(items[j] - items[k]));
+      }
+    }
+
+    int countDiffsAboveThreshold = 0;
+    double threshold = 0.01;
+    countDiffsAboveThreshold = std::count_if(diffs.begin(), diffs.end(), [&](double d){return d>threshold;});
+    countDiffsAboveThresholdVec.push_back(countDiffsAboveThreshold);
+    std::cout << "Total N(number of images) = " << 15 << " ni(number of occurrences) = " <<  countDiffsAboveThreshold << std::endl;
+
+  }
+
+  std::cout << "countDiffsAboveThresholdVec \n";
+  std::sort(countDiffsAboveThresholdVec.begin(), countDiffsAboveThresholdVec.end());
+  for(auto i:countDiffsAboveThresholdVec){
+    std::cout << i << ", ";
+  }
+  std::cout << "\n";
+
+    return 0;
+     */
 }
 

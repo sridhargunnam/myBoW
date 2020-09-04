@@ -17,3 +17,10 @@ target_link_libraries(fileStorage1
         gtest
         gmock
         benchmark::benchmark)
+
+
+add_executable(TestStats TestStats.cpp Stats.cpp Stats.h)
+target_link_libraries(TestStats
+        PRIVATE project_options
+        project_warnings
+        ${OpenCV_LIBS})

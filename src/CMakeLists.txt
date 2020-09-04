@@ -47,7 +47,7 @@ include(opencv.cmake)
 
 # Generic test that uses conan libs
 add_executable(intro
-        main.cpp)
+        main.cpp experimental/Stats.cpp experimental/Stats.h)
 target_link_libraries(intro
   PRIVATE project_options
           project_warnings
