@@ -15,8 +15,6 @@
 #include <iterator>
 #include <numeric>
 
-
-typedef std::vector<std::string> stringvec;
 struct path_leaf_string
 {
   std::string operator()(const std::filesystem::directory_entry& entry) const
@@ -25,7 +23,7 @@ struct path_leaf_string
   }
 };
 
-void ReadDirectory(const std::string& dir_path, stringvec& v,  std::string& data_set_name)
+void ReadDirectory(const std::string& dir_path, std::vector<std::string>& v,  std::string& data_set_name)
 {
   std::filesystem::path p(dir_path);
   // there is no reverse iteartor for filesystem::path
@@ -92,41 +90,49 @@ void AddDescriptorsToList(std::vector<cv::KeyPoint>& list_of_keypoints, std::vec
 //
 //}
 
-int Plot(){
-  {
-    cv::Mat data_x( 1, 51, CV_64F );
-    cv::Mat data_y( 1, 51, CV_64F );
+template<typename T>
+void Plot(const std::vector<std::string>& file_list, std::vector<std::vector<T>>& all_hists_normalized ){
+  cv::namedWindow("Plot window", cv::WINDOW_KEEPRATIO);
+  cv::namedWindow("Image window",  cv::WINDOW_KEEPRATIO);
+    for (auto index=0; index < file_list.size(); ++index) {
+      cv::Mat img = cv::imread(file_list[index], cv::IMREAD_COLOR);
+      cv::waitKey(0);
+      std::cout << "file_name " << file_list[index] << "\n";
+      cv::imshow("Image window", img);
+      std::vector<T> current_hist = all_hists_normalized[index];
+      index++;
+      auto len = static_cast<int>(current_hist.size());
+      cv::Mat data_x(1, len, CV_64F);
+      cv::Mat data_y(1, len, CV_64F);
 
-    for ( int i = 0; i < data_x.cols; i++ )
-    {
-      double x = ( i - data_x.cols / 2 );
-      data_x.at<double>( 0, i ) = x;
-      data_y.at<double>( 0, i ) = x * x * x;
+      for (int i = 0; i < len; i++) {
+        double x = static_cast<double>(i);
+        data_x.at<double>(0, i) = x;
+        data_y.at<double>(0, i) = current_hist[i];
+      }
+
+      std::cout << "data_x : " << data_x << std::endl;
+      std::cout << "data_y : " << data_y << std::endl;
+
+      cv::Mat plot_result;
+
+      cv::Ptr<cv::plot::Plot2d> plot = cv::plot::Plot2d::create(data_x, data_y);
+      plot->render(plot_result);
+
+      imshow("Plot window", plot_result);
+
+      plot->setShowText(false);
+      plot->setShowGrid(false);
+      plot->setPlotBackgroundColor(cv::Scalar(255, 200, 200));
+      plot->setPlotLineColor(cv::Scalar(255, 0, 0));
+      plot->setPlotLineWidth(2);
+      plot->setInvertOrientation(true);
+      plot->render(plot_result);
+
+      imshow("Plot window", plot_result);
+      cv::waitKey();
     }
 
-    std::cout << "data_x : " << data_x << std::endl;
-    std::cout << "data_y : " << data_y << std::endl;
-
-    cv::Mat plot_result;
-
-    cv::Ptr<cv::plot::Plot2d> plot = cv::plot::Plot2d::create( data_x, data_y );
-    plot->render(plot_result);
-
-    imshow( "The plot rendered with default visualization options", plot_result );
-
-    plot->setShowText( false );
-    plot->setShowGrid( false );
-    plot->setPlotBackgroundColor( cv::Scalar( 255, 200, 200 ) );
-    plot->setPlotLineColor( cv::Scalar( 255, 0, 0 ) );
-    plot->setPlotLineWidth( 2 );
-    plot->setInvertOrientation( true );
-    plot->render( plot_result );
-
-    imshow( "The plot rendered with some of custom visualization options", plot_result );
-    cv::waitKey();
-
-    return 0;
-  }
 }
 
 std::vector<cv::Scalar> PopulateColors(int N=1){
@@ -158,7 +164,7 @@ void LoadFromFile(std::string filename, T& item){
 
 void ProcessInputs( const std::string& data_set_dir,  const bool read_images,
                     std::vector<cv::Mat>& list_of_descriptors, std::vector<cv::KeyPoint>& list_of_keypoints,
-                    stringvec& file_list)
+                    std::vector<std::string>& file_list)
 {
 
   std::string data_set_name;
@@ -179,9 +185,7 @@ void ProcessInputs( const std::string& data_set_dir,  const bool read_images,
       fs << "list_of_descriptors" << list_of_descriptors;
       fs << "list_of_keypoints" << list_of_keypoints;
     }
-  }
-
-  else {
+  }   else {
     //read
     {
       cv::FileStorage fs(descriptors_and_key_points_file, cv::FileStorage::READ);
@@ -234,19 +238,21 @@ int main(int ac, char** av){
   bool enable_debug_write_images      = parser.get<bool>("@enable_debug_write_images");
   bool use_saved_labels_centers_hists = parser.get<bool>( "@use_saved_labels_centers_hists");
 
-  stringvec file_list;
+  std::vector<std::string> file_list;
   std::vector<cv::Mat> list_of_descriptors;
   std::vector<cv::KeyPoint> list_of_keypoints;
 
   std::vector<std::vector<int>> all_hists;
   std::vector<std::vector<double>> all_hists_normalized;
-  const int kCentroids = 100;
+  const int kCentroids = 20;
   cv::Mat labels;
   cv::Mat centers;
   std::string fname_centers = "/mnt/data/ws/Evaluation/cv/unio-bonn-cpp/Bag_of_Visual_Words/save_dir/centers.yml.gz";
   std::string fname_labels = "/mnt/data/ws/Evaluation/cv/unio-bonn-cpp/Bag_of_Visual_Words/save_dir/labels.yml.gz";
   std::string fname_hists = "/mnt/data/ws/Evaluation/cv/unio-bonn-cpp/Bag_of_Visual_Words/save_dir/hists.yml.gz";
   std::string fname_norm_hists = "/mnt/data/ws/Evaluation/cv/unio-bonn-cpp/Bag_of_Visual_Words/save_dir/norm_hists.yml.gz";
+  std::string fname_file_list = "/mnt/data/ws/Evaluation/cv/unio-bonn-cpp/Bag_of_Visual_Words/save_dir/file_list.yml.gz";
+
 
   if(!use_saved_labels_centers_hists){
     /*
@@ -326,51 +332,49 @@ int main(int ac, char** av){
       SaveToFile(fname_labels, labels );
       SaveToFile(fname_hists, all_hists );
       SaveToFile(fname_norm_hists, all_hists_normalized);
-
-
-
+      SaveToFile(fname_file_list, file_list);
     } else {
-    // Save all the centroids and histograms
+//     Save all the centroids and histograms
 //      LoadFromFile(fname_labels, labels );
 //      LoadFromFile(fname_hists, all_hists );
 //      LoadFromFile(fname_centers, centers );
       LoadFromFile(fname_norm_hists, all_hists_normalized);
+      LoadFromFile(fname_file_list, file_list);
     }
 
-    Stats<double> stats{all_hists_normalized};
-    return 0;
-    /*
-  std::vector<int> countDiffsAboveThresholdVec;
-  for(int c=0; c<kCentroids; c++){
-    std::vector<double> diffs;
-    //diffs.reserve(kCentroids*(kCentroids-1)/2);
-    std::vector<double> items;
-    for(auto h:all_hists_normalized){
-      items.push_back(h[c]);
-    }
 
-    for(int j=0; j<(15-1); j++){
-      for(int k=(j+1); k < 15; k++){
-        diffs.push_back(std::abs(items[j] - items[k]));
+    Stats<double> stats{all_hists_normalized, file_list};
+    //Plot(file_list, all_hists_normalized);
+    //auto all_variance = stats.getVariance();
+    auto all_mean = stats.getMean();
+    std::vector<double> hist_tfidf_ni(all_hists_normalized[0].size(),0);
+    //TF-IDF
+    for(int i=0; i<all_hists_normalized.size(); i++){
+      for(auto j=0; j<all_hists_normalized[0].size(); j++){
+        if(all_hists_normalized[i][j] <= all_mean[j]){
+          hist_tfidf_ni[j] += 1;
+        }
       }
     }
 
-    int countDiffsAboveThreshold = 0;
-    double threshold = 0.01;
-    countDiffsAboveThreshold = std::count_if(diffs.begin(), diffs.end(), [&](double d){return d>threshold;});
-    countDiffsAboveThresholdVec.push_back(countDiffsAboveThreshold);
-    std::cout << "Total N(number of images) = " << 15 << " ni(number of occurrences) = " <<  countDiffsAboveThreshold << std::endl;
+    PrintVecContainer("hist_tfidf_ni", hist_tfidf_ni);
+    std::for_each(hist_tfidf_ni.begin(), hist_tfidf_ni.end(),
+      [&](auto& first){
+        first = std::log(all_hists_normalized.size()/first);
+      });
+    PrintVecContainer("IDF", hist_tfidf_ni);
+    PrintVecContainer("hist_tfidf_ni", hist_tfidf_ni, 7);
 
-  }
+    for(auto& hi: all_hists_normalized){
+      std::cout << "----------------------------------------------------\n";
+      //PrintVecContainer("hi_before", hi, 7);
+      //PrintVecContainer("hist_tfidf_ni", hist_tfidf_ni, 7);
+      std::transform(hi.begin(), hi.end(), hist_tfidf_ni.cbegin(), hi.begin(),
+        [](auto& first, const auto second){ first = first*second; return first; });
+      //PrintVecContainer("hi_after", hi, 7);
+    }
 
-  std::cout << "countDiffsAboveThresholdVec \n";
-  std::sort(countDiffsAboveThresholdVec.begin(), countDiffsAboveThresholdVec.end());
-  for(auto i:countDiffsAboveThresholdVec){
-    std::cout << i << ", ";
-  }
-  std::cout << "\n";
-
+    // TODO cost matrix
     return 0;
-     */
 }
 
