@@ -15,8 +15,8 @@ target_link_libraries(fileStorage1
         project_warnings
         ${OpenCV_LIBS}
         gtest
-        gmock
-        benchmark::benchmark)
+        gmock)
+	#benchmark::benchmark)
 
 
 add_executable(TestStats TestStats.cpp Stats.cpp Stats.h)

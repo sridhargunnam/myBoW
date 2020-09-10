@@ -210,7 +210,7 @@ void WriteDebugImage(const std::string& filename, cv::Mat& image){
     temp_prev = temp;
     temp = i;
   }
-  std::string debug_image_file_path = "/mnt/data/ws/Evaluation/cv/unio-bonn-cpp/Bag_of_Visual_Words/debug_images/" + temp_prev + "/";
+  std::string debug_image_file_path = "/home/sgunnam/wsp/CLionProjects/myBoW/data/debug_images/" + temp_prev + "/";
   debug_image_file_path += temp;
   cv::imwrite(debug_image_file_path,image);
 }
@@ -247,12 +247,11 @@ int main(int ac, char** av){
   const int kCentroids = 20;
   cv::Mat labels;
   cv::Mat centers;
-  std::string fname_centers = "/mnt/data/ws/Evaluation/cv/unio-bonn-cpp/Bag_of_Visual_Words/save_dir/centers.yml.gz";
-  std::string fname_labels = "/mnt/data/ws/Evaluation/cv/unio-bonn-cpp/Bag_of_Visual_Words/save_dir/labels.yml.gz";
-  std::string fname_hists = "/mnt/data/ws/Evaluation/cv/unio-bonn-cpp/Bag_of_Visual_Words/save_dir/hists.yml.gz";
-  std::string fname_norm_hists = "/mnt/data/ws/Evaluation/cv/unio-bonn-cpp/Bag_of_Visual_Words/save_dir/norm_hists.yml.gz";
-  std::string fname_file_list = "/mnt/data/ws/Evaluation/cv/unio-bonn-cpp/Bag_of_Visual_Words/save_dir/file_list.yml.gz";
-
+  std::string fname_centers = "/home/sgunnam/wsp/CLionProjects/myBoW/data/save_dir/centers.yml.gz";
+  std::string fname_labels = "/home/sgunnam/wsp/CLionProjects/myBoW/data/save_dir/labels.yml.gz";
+  std::string fname_hists = "/home/sgunnam/wsp/CLionProjects/myBoW/data/save_dir/hists.yml.gz";
+  std::string fname_norm_hists = "/home/sgunnam/wsp/CLionProjects/myBoW/data/save_dir/norm_hists.yml.gz";
+  std::string fname_file_list = "/home/sgunnam/wsp/CLionProjects/myBoW/data/save_dir/file_list.yml.gz";
 
   if(!use_saved_labels_centers_hists){
     /*
@@ -260,7 +259,7 @@ int main(int ac, char** av){
    * If the Keypoints and descriptors already exist, and if the read_option is "read_images" is false, then will read the
    * descriptors and keypoints from the previously generated results.
    */
-    std::string data_set_dir = "/mnt/data/ws/Evaluation/cv/unio-bonn-cpp/Bag_of_Visual_Words/myRoom/training";
+    std::string data_set_dir = "/home/sgunnam/wsp/CLionProjects/myBoW/data/myRoom/training";
 
     ProcessInputs(data_set_dir, read_images, list_of_descriptors, list_of_keypoints, file_list);
 
@@ -374,7 +373,39 @@ int main(int ac, char** av){
       //PrintVecContainer("hi_after", hi, 7);
     }
 
-    // TODO cost matrix
-    return 0;
+  // TODO cost matrix
+  std::vector<std::vector<double>> costMatrix{all_hists_normalized.size(),
+                                              std::vector<double>(all_hists_normalized.size())};
+  auto costMatrixIter = costMatrix.begin();
+  for(auto m=0; m<all_hists_normalized.size(); ++m){
+    for(auto n=0; n< all_hists_normalized.size(); ++n){
+      std::vector<double>    temp(all_hists_normalized[0].size(), 0);
+      for(auto i=0; i<all_hists_normalized[0].size(); i++){
+        temp[i] = std::pow((all_hists_normalized[m][i]-all_hists_normalized[n][i]), 2);
+        std::cout << "temp = " << temp[i] << "\n";
+        std::cout << "all_hists_normalized[m][i]" << all_hists_normalized[m][i] << "\n";
+        std::cout << "all_hists_normalized[n][i]" << all_hists_normalized[n][i] << "\n";
+      }
+
+      double accum =0;
+      for(auto temp_item:temp){
+        accum += temp_item;
+      }
+      costMatrix[m][n] = accum*100;
+    }
+
+    for(auto file_item:file_list){
+      std::cout << file_item << "\n";
+    }
+    std::cout << std::fixed;
+    std::cout << std::setprecision(3);
+    for(auto i:costMatrix){
+      for(auto j:i){
+        std::cout << j << ", ";
+      }
+      std::cout << "\n";
+    }
+  }
+  return 0;
 }
 

@@ -1,3 +1,4 @@
+data/**
 .idea/**
 .python-version
 cmake-build-debug/**
