@@ -1,4 +1,5 @@
 #include<iostream>
+#include<iostream>
 #include <string>
 #include <vector>
 #include <algorithm>
@@ -200,11 +201,12 @@ void ProcessInputs( const std::string& data_set_dir,  const bool read_images,
   }
 }
 
-
 void WriteDebugImage(const std::string& filename, cv::Mat& image){
   std::filesystem::path p(filename);
   // there is no reverse iterator for filesystem::path
   std::string temp{};
+
+
   std::string temp_prev;
   for(auto i:p){
     temp_prev = temp;
@@ -229,6 +231,8 @@ void CheckCurrentHistogramCount(std::vector<T>& current_image_hist, const int& t
   std::cout << "Mismatching descriptors " << sum << "\n";
   }
 }
+
+std::vector<int> CreateTestImageHistogram(const cv::Mat& descriptors_test, const cv::Mat& centers, std::vector<int>& label_test);
 
 int main(int ac, char** av){
   // read_images_from_disk  enable_debug_write_image
@@ -336,7 +340,7 @@ int main(int ac, char** av){
 //     Save all the centroids and histograms
 //      LoadFromFile(fname_labels, labels );
 //      LoadFromFile(fname_hists, all_hists );
-//      LoadFromFile(fname_centers, centers );
+      LoadFromFile(fname_centers, centers );
       LoadFromFile(fname_norm_hists, all_hists_normalized);
       LoadFromFile(fname_file_list, file_list);
     }
@@ -406,6 +410,44 @@ int main(int ac, char** av){
       std::cout << "\n";
     }
   }
+
+  cv::Mat im_test = cv::imread("/home/sgunnam/wsp/CLionProjects/myBoW/data/myRoom/test_images/bottle.jpg");
+  auto detector_test = cv::SIFT::create(); //num_of_descriptor);
+  std::vector<cv::KeyPoint> keypoints_test;
+  cv::Mat descriptors_test;
+  detector_test->detect(im_test, keypoints_test);
+  detector_test->compute(im_test, keypoints_test, descriptors_test);
+  std::vector<int> label_test;
+
+  std::vector<int> test_hist =
+      CreateTestImageHistogram(descriptors_test, centers, label_test);
+
+
   return 0;
 }
 
+std::vector<int> CreateTestImageHistogram(const cv::Mat& descriptors_test, const cv::Mat& centers, std::vector<int>& label_test){
+  int desc_count      = descriptors_test.rows;
+  int centroids_count = centers.rows;
+  label_test.resize(desc_count, INT_MAX);
+  for(int i=0; i<desc_count; i++){
+    auto euclidean_ssd = DBL_MAX;
+    for(int j=0; j<centroids_count; j++){
+      auto v1 = descriptors_test.row(i);
+      auto v2 = centers.row(j);
+      auto euclidean_dist = ((cv::abs(v1-v2)));
+      cv::MatExpr euclidian_dist_sqr = euclidean_dist.mul(euclidean_dist);
+      if (sum(euclidian_dist_sqr)[0] < euclidean_ssd) {
+        euclidean_ssd = sum(euclidian_dist_sqr)[0];
+        label_test[i] = j;
+      }
+
+    }
+  }
+
+  // generate histogram
+  std::vector<int> test_hist(centers.size[0], 0);
+  for(auto lab:label_test)
+    ++test_hist.at(lab);
+  return test_hist;
+}

@@ -30,3 +30,12 @@ target_link_libraries(bowStats
         PRIVATE project_options
         project_warnings
         ${OpenCV_LIBS})
+
+
+
+add_executable(TestRealSense TestRealSense.cpp TestRealSense.cpp)
+target_link_libraries(TestRealSense
+        PRIVATE project_options
+        project_warnings
+        ${OpenCV_LIBS}
+        ${realsense_INCLUDE_DIR})
