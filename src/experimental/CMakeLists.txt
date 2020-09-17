@@ -25,7 +25,7 @@ target_link_libraries(TestStats
         project_warnings
         ${OpenCV_LIBS})
 
-add_library(bowStats Stats.cpp Stats.h)
+add_library(bowStats Stats.cpp Stats.h showMultipleImages.h)
 target_link_libraries(bowStats
         PRIVATE project_options
         project_warnings

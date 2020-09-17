@@ -53,6 +53,7 @@ const std::vector<cv::KeyPoint> ComputeSiftKeypoints(const cv::Mat& input_image)
   return keypoints;
 }
 
+#include "experimental/showMultipleImages.h"
 void AddDescriptorsToList(std::vector<cv::KeyPoint>& list_of_keypoints, std::vector<cv::Mat> &list_of_descriptors, std::string input_image, const int num_of_descriptor= 100){
   cv::Mat im = cv::imread(input_image);
   std::cout << num_of_descriptor << std::endl;
@@ -359,17 +360,17 @@ int main(int ac, char** av){
         }
       }
     }
-
     PrintVecContainer("hist_tfidf_ni", hist_tfidf_ni);
     std::for_each(hist_tfidf_ni.begin(), hist_tfidf_ni.end(),
       [&](auto& first){
         first = std::log(all_hists_normalized.size()/first);
       });
-    PrintVecContainer("IDF", hist_tfidf_ni);
-    PrintVecContainer("hist_tfidf_ni", hist_tfidf_ni, 7);
+      PrintVecContainer("hist_tfidf_ni after log operation", hist_tfidf_ni);
+//    PrintVecContainer("IDF", hist_tfidf_ni);
+//    PrintVecContainer("hist_tfidf_ni", hist_tfidf_ni, 7);
 
     for(auto& hi: all_hists_normalized){
-      std::cout << "----------------------------------------------------\n";
+      //std::cout << "----------------------------------------------------\n";
       //PrintVecContainer("hi_before", hi, 7);
       //PrintVecContainer("hist_tfidf_ni", hist_tfidf_ni, 7);
       std::transform(hi.begin(), hi.end(), hist_tfidf_ni.cbegin(), hi.begin(),
@@ -377,7 +378,6 @@ int main(int ac, char** av){
       //PrintVecContainer("hi_after", hi, 7);
     }
 
-  // TODO cost matrix
   std::vector<std::vector<double>> costMatrix{all_hists_normalized.size(),
                                               std::vector<double>(all_hists_normalized.size())};
   auto costMatrixIter = costMatrix.begin();
@@ -386,9 +386,9 @@ int main(int ac, char** av){
       std::vector<double>    temp(all_hists_normalized[0].size(), 0);
       for(auto i=0; i<all_hists_normalized[0].size(); i++){
         temp[i] = std::pow((all_hists_normalized[m][i]-all_hists_normalized[n][i]), 2);
-        std::cout << "temp = " << temp[i] << "\n";
-        std::cout << "all_hists_normalized[m][i]" << all_hists_normalized[m][i] << "\n";
-        std::cout << "all_hists_normalized[n][i]" << all_hists_normalized[n][i] << "\n";
+        //std::cout << "temp = " << temp[i] << "\n";
+        //std::cout << "all_hists_normalized[m][i]" << all_hists_normalized[m][i] << "\n";
+        //std::cout << "all_hists_normalized[n][i]" << all_hists_normalized[n][i] << "\n";
       }
 
       double accum =0;
@@ -398,9 +398,11 @@ int main(int ac, char** av){
       costMatrix[m][n] = accum*100;
     }
 
+    /*
     for(auto file_item:file_list){
       std::cout << file_item << "\n";
     }
+
     std::cout << std::fixed;
     std::cout << std::setprecision(3);
     for(auto i:costMatrix){
@@ -409,9 +411,12 @@ int main(int ac, char** av){
       }
       std::cout << "\n";
     }
+    */
   }
 
-  cv::Mat im_test = cv::imread("/home/sgunnam/wsp/CLionProjects/myBoW/data/myRoom/test_images/bottle.jpg");
+  std::string test_image_filename = "/home/sgunnam/wsp/CLionProjects/myBoW/data/myRoom/test_images/bottle.jpg";
+  cv::Mat im_test = cv::imread(test_image_filename);
+  //showManyImages("an image in showMany images", 2, im_test, im_test);
   auto detector_test = cv::SIFT::create(); //num_of_descriptor);
   std::vector<cv::KeyPoint> keypoints_test;
   cv::Mat descriptors_test;
@@ -421,8 +426,33 @@ int main(int ac, char** av){
 
   std::vector<int> test_hist =
       CreateTestImageHistogram(descriptors_test, centers, label_test);
+  //Normalize
+  std::vector<double> test_hist_norm(test_hist.size());
+  std::copy(test_hist.begin(), test_hist.end(), test_hist_norm.begin());
+  auto sum_test_hist = std::accumulate(test_hist.begin(), test_hist.end(), 0);
+  std::cout << "Normalized Histogram = \n";
+  std::for_each(test_hist_norm.begin(), test_hist_norm.end(), [&](auto &val){val = val/sum_test_hist; std::cout << val << ", "; });
+  auto test_hist_norm_check_sum = std::accumulate(test_hist_norm.begin(), test_hist_norm.end(), 0.0);
+  assert(test_hist_norm_check_sum == 1);
 
+  PrintVecContainer("Before test_hist_norm", test_hist_norm);
+  std::transform(test_hist_norm.begin(), test_hist_norm.end(), hist_tfidf_ni.cbegin(), test_hist_norm.begin(),
+                 [](auto& first, const auto second){ first = first*second; return first; });
+  PrintVecContainer("After test_hist_norm", test_hist_norm);
 
+  for(auto c:costMatrix){
+    double ssd_test =  std::inner_product(c.begin(), c.end(), test_hist_norm.begin(), 0.0,
+                                                     std::plus<>(), [](auto&l, auto& r){ return std::pow((l-r),2);});
+    std::cout << "ssd_test = " << ssd_test << std::endl;
+  }
+
+  int matchCount = 11;
+  std::vector<std::string> matching_files(matchCount);
+  //std::copy_n(file_list.begin(), 5, matching_files.begin());
+  for(auto i=0; i<matchCount; i++){
+    matching_files.at(i) = file_list.at(i);
+  }
+  ShowManyImagesForBoVW("BoVW image matching", test_image_filename, matching_files);
   return 0;
 }
 
