@@ -4,6 +4,7 @@
 
 #ifndef EXAMPLES_SHOWMULTIPLEIMAGES_H
 #define EXAMPLES_SHOWMULTIPLEIMAGES_H
+#pragma once
 #include <opencv2/opencv.hpp>
 
 #include <stdio.h>
@@ -65,12 +66,12 @@ cegparamesh[at]gmail[dot]com
 ///////////////////////////////////////////////////////////////////////*/
 #include <algorithm>
 // TO Do, Modify to accommodate multiple types of channel
-void ShowManyImagesForBoVW(const std::string title, const std::string test_image, const std::vector<std::string> matching_images) {
+void ShowManyImagesForBoVW(const std::string& title, const std::string& test_image, const std::vector<std::string>& matching_images) {
 
-  int nImages = 1 + matching_images.size();
+  auto nImages = 1 + matching_images.size();
   std::vector<cv::Mat> images_list(nImages);
   images_list.at(0) = cv::imread(test_image);
-  for(auto i=1; i < (nImages); i++){
+  for(auto i=1ul; i < (nImages); i++){
     images_list.at(i) = cv::imread(matching_images.at(i-1));
   }
 //  std::transform(matching_images.begin(), matching_images.end(), images_list.end(),
@@ -144,9 +145,9 @@ void ShowManyImagesForBoVW(const std::string title, const std::string test_image
 
 
 // Loop for nImages number of arguments
-  for (i = 0, m = 20, n = 20; i < nImages; i++, m += (20 + size)) {
+  for (i = 0, m = 20, n = 20; i <  static_cast<int>(nImages); i++, m += (20 + size)) {
     // Get the Pointer to the IplImage
-    Mat img = images_list.at(i);
+    Mat img = images_list.at( static_cast<unsigned long>(i));
 
     // Check whether it is NULL or not
     // If it is NULL, release the image, and return
@@ -163,7 +164,7 @@ void ShowManyImagesForBoVW(const std::string title, const std::string test_image
     max = (x > y)? x: y;
 
     // Find the scaling factor to resize the image
-    scale = (float) ( (float) max / size );
+    scale =  ( static_cast<float>( max) / static_cast<float>(size));
 
     // Used to Align the images
     if( i % w == 0 && m!= 20) {
@@ -173,7 +174,8 @@ void ShowManyImagesForBoVW(const std::string title, const std::string test_image
 
     // Set the image ROI to display the current image
     // Resize the input image and copy the it to the Single Big Image
-    Rect ROI(m, n, (int)( x/scale ), (int)( y/scale ));
+    Rect ROI(m, n,  static_cast<int>( static_cast<float>(x)/scale ),
+                    static_cast<int>( static_cast<float>(y)/scale ));
     Mat temp; resize(img,temp, Size(ROI.width, ROI.height));
     temp.copyTo(DispImage(ROI));
   }
@@ -182,319 +184,6 @@ void ShowManyImagesForBoVW(const std::string title, const std::string test_image
   namedWindow( title, 1 );
   imshow( title, DispImage);
   waitKey();
-  return;
-
-}
-
-
-// TO Do, Modify to accommodate multiple types of channel
-void showManyImages(string title, int nArgs, ...) {
-    int size;
-    int i;
-    int m, n;
-    int x, y;
-
-// w - Maximum number of images in a row
-// h - Maximum number of images in a column
-    int w, h;
-
-// scale - How much we have to resize the image
-    float scale;
-    int max;
-
-// If the number of arguments is lesser than 0 or greater than 12
-// return without displaying
-    if(nArgs <= 0) {
-        printf("Number of arguments too small....\n");
-        return;
-    }
-    else if(nArgs > 14) {
-        printf("Number of arguments too large, can only handle maximally 12 images at a time ...\n");
-        return;
-    }
-// Determine the size of the image,
-// and the number of rows/cols
-// from number of arguments
-    else if (nArgs == 1) {
-        w = h = 1;
-        size = 300;
-    }
-    else if (nArgs == 2) {
-        w = 2; h = 1;
-        size = 300;
-    }
-    else if (nArgs == 3 || nArgs == 4) {
-        w = 2; h = 2;
-        size = 300;
-    }
-    else if (nArgs == 5 || nArgs == 6) {
-        w = 3; h = 2;
-        size = 200;
-    }
-    else if (nArgs == 7 || nArgs == 8) {
-        w = 4; h = 2;
-        size = 200;
-    }
-    else {
-        w = 4; h = 3;
-        size = 150;
-    }
-
-// Create a new 3 channel image
-    Mat DispImage = Mat::zeros(Size(100 + size*w, 60 + size*h), CV_8UC3);
-
-// Used to get the arguments passed
-    va_list args;
-    va_start(args, nArgs);
-
-// Loop for nArgs number of arguments
-    for (i = 0, m = 20, n = 20; i < nArgs; i++, m += (20 + size)) {
-        // Get the Pointer to the IplImage
-        Mat img = va_arg(args, Mat);
-
-        // Check whether it is NULL or not
-        // If it is NULL, release the image, and return
-        if(img.empty()) {
-            printf("Invalid arguments");
-            return;
-        }
-
-        // Find the width and height of the image
-        x = img.cols;
-        y = img.rows;
-
-        // Find whether height or width is greater in order to resize the image
-        max = (x > y)? x: y;
-
-        // Find the scaling factor to resize the image
-        scale = (float) ( (float) max / size );
-
-        // Used to Align the images
-        if( i % w == 0 && m!= 20) {
-            m = 20;
-            n+= 20 + size;
-        }
-
-        // Set the image ROI to display the current image
-        // Resize the input image and copy the it to the Single Big Image
-        Rect ROI(m, n, (int)( x/scale ), (int)( y/scale ));
-        Mat temp; resize(img,temp, Size(ROI.width, ROI.height));
-        temp.copyTo(DispImage(ROI));
-    }
-
-// Create a new window, and show the Single Big Image
-    namedWindow( title, 1 );
-    imshow( title, DispImage);
-    waitKey();
-
-// End the number of arguments
-    va_end(args);
-}
-
-void showManyImages1C(string title, int nArgs, ...) {
-    int size;
-    int i;
-    int m, n;
-    int x, y;
-
-// w - Maximum number of images in a row
-// h - Maximum number of images in a column
-    int w, h;
-
-// scale - How much we have to resize the image
-    float scale;
-    int max;
-
-// If the number of arguments is lesser than 0 or greater than 12
-// return without displaying
-    if(nArgs <= 0) {
-        printf("Number of arguments too small....\n");
-        return;
-    }
-    else if(nArgs > 14) {
-        printf("Number of arguments too large, can only handle maximally 12 images at a time ...\n");
-        return;
-    }
-// Determine the size of the image,
-// and the number of rows/cols
-// from number of arguments
-    else if (nArgs == 1) {
-        w = h = 1;
-        size = 300;
-    }
-    else if (nArgs == 2) {
-        w = 2; h = 1;
-        size = 300;
-    }
-    else if (nArgs == 3 || nArgs == 4) {
-        w = 2; h = 2;
-        size = 300;
-    }
-    else if (nArgs == 5 || nArgs == 6) {
-        w = 3; h = 2;
-        size = 200;
-    }
-    else if (nArgs == 7 || nArgs == 8) {
-        w = 4; h = 2;
-        size = 200;
-    }
-    else {
-        w = 4; h = 3;
-        size = 150;
-    }
-
-// Create a new 3 channel image
-    Mat DispImage = Mat::zeros(Size(100 + size*w, 60 + size*h), CV_8UC1);
-
-// Used to get the arguments passed
-    va_list args;
-    va_start(args, nArgs);
-
-// Loop for nArgs number of arguments
-    for (i = 0, m = 20, n = 20; i < nArgs; i++, m += (20 + size)) {
-        // Get the Pointer to the IplImage
-        Mat img = va_arg(args, Mat);
-
-        // Check whether it is NULL or not
-        // If it is NULL, release the image, and return
-        if(img.empty()) {
-            printf("Invalid arguments");
-            return;
-        }
-
-        // Find the width and height of the image
-        x = img.cols;
-        y = img.rows;
-
-        // Find whether height or width is greater in order to resize the image
-        max = (x > y)? x: y;
-
-        // Find the scaling factor to resize the image
-        scale = (float) ( (float) max / size );
-
-        // Used to Align the images
-        if( i % w == 0 && m!= 20) {
-            m = 20;
-            n+= 20 + size;
-        }
-
-        // Set the image ROI to display the current image
-        // Resize the input image and copy the it to the Single Big Image
-        Rect ROI(m, n, (int)( x/scale ), (int)( y/scale ));
-        Mat temp; resize(img,temp, Size(ROI.width, ROI.height));
-        temp.copyTo(DispImage(ROI));
-    }
-
-// Create a new window, and show the Single Big Image
-    namedWindow( title, 1 );
-    imshow( title, DispImage);
-    waitKey();
-
-// End the number of arguments
-    va_end(args);
-}
-
-void showManyImages3C(string title, int nArgs, ...) {
-    int size;
-    int i;
-    int m, n;
-    int x, y;
-
-// w - Maximum number of images in a row
-// h - Maximum number of images in a column
-    int w, h;
-
-// scale - How much we have to resize the image
-    float scale;
-    int max;
-
-// If the number of arguments is lesser than 0 or greater than 12
-// return without displaying
-    if(nArgs <= 0) {
-        printf("Number of arguments too small....\n");
-        return;
-    }
-    else if(nArgs > 14) {
-        printf("Number of arguments too large, can only handle maximally 12 images at a time ...\n");
-        return;
-    }
-// Determine the size of the image,
-// and the number of rows/cols
-// from number of arguments
-    else if (nArgs == 1) {
-        w = h = 1;
-        size = 300;
-    }
-    else if (nArgs == 2) {
-        w = 2; h = 1;
-        size = 300;
-    }
-    else if (nArgs == 3 || nArgs == 4) {
-        w = 2; h = 2;
-        size = 300;
-    }
-    else if (nArgs == 5 || nArgs == 6) {
-        w = 3; h = 2;
-        size = 200;
-    }
-    else if (nArgs == 7 || nArgs == 8) {
-        w = 4; h = 2;
-        size = 200;
-    }
-    else {
-        w = 4; h = 3;
-        size = 150;
-    }
-
-// Create a new 3 channel image
-    Mat DispImage = Mat::zeros(Size(100 + size*w, 60 + size*h), CV_8UC3);
-
-// Used to get the arguments passed
-    va_list args;
-    va_start(args, nArgs);
-
-// Loop for nArgs number of arguments
-    for (i = 0, m = 20, n = 20; i < nArgs; i++, m += (20 + size)) {
-        // Get the Pointer to the IplImage
-        Mat img = va_arg(args, Mat);
-
-        // Check whether it is NULL or not
-        // If it is NULL, release the image, and return
-        if(img.empty()) {
-            printf("Invalid arguments");
-            return;
-        }
-
-        // Find the width and height of the image
-        x = img.cols;
-        y = img.rows;
-
-        // Find whether height or width is greater in order to resize the image
-        max = (x > y)? x: y;
-
-        // Find the scaling factor to resize the image
-        scale = (float) ( (float) max / size );
-
-        // Used to Align the images
-        if( i % w == 0 && m!= 20) {
-            m = 20;
-            n+= 20 + size;
-        }
-
-        // Set the image ROI to display the current image
-        // Resize the input image and copy the it to the Single Big Image
-        Rect ROI(m, n, (int)( x/scale ), (int)( y/scale ));
-        Mat temp; resize(img,temp, Size(ROI.width, ROI.height));
-        temp.copyTo(DispImage(ROI));
-    }
-
-// Create a new window, and show the Single Big Image
-    namedWindow( title, 1 );
-    imshow( title, DispImage);
-    waitKey();
-
-// End the number of arguments
-    va_end(args);
 }
 
 #endif //EXAMPLES_SHOWMULTIPLEIMAGES_H

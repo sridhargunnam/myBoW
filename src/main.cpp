@@ -1,5 +1,4 @@
 #include<iostream>
-#include<iostream>
 #include <string>
 #include <vector>
 #include <algorithm>
@@ -53,11 +52,9 @@ const std::vector<cv::KeyPoint> ComputeSiftKeypoints(const cv::Mat& input_image)
   return keypoints;
 }
 
-#include "experimental/showMultipleImages.h"
-void AddDescriptorsToList(std::vector<cv::KeyPoint>& list_of_keypoints, std::vector<cv::Mat> &list_of_descriptors, std::string input_image, const int num_of_descriptor= 100){
-  cv::Mat im = cv::imread(input_image);
-  std::cout << num_of_descriptor << std::endl;
-  auto detector = cv::SIFT::create(); //num_of_descriptor);
+//#include "experimental/showMultipleImages.h"
+void AddDescriptorsToList(std::vector<cv::KeyPoint>& list_of_keypoints, std::vector<cv::Mat> &list_of_descriptors, std::string input_image, const int num_of_descriptor= 500){  cv::Mat im = cv::imread(input_image);
+  auto detector = cv::SIFT::create(10); //num_of_descriptor);
   std::vector<cv::KeyPoint> keypoints;
   cv::Mat descriptors;
   detector->detect(im, keypoints);
@@ -173,7 +170,7 @@ void ProcessInputs( const std::string& data_set_dir,  const bool read_images,
   ReadDirectory(data_set_dir, file_list, data_set_name);
   // This file should be in bin directory
   std::cout << "dataset name = " << data_set_name << "\n";
-  std::string descriptors_and_key_points_file = "/mnt/data/ws/Evaluation/cv/unio-bonn-cpp/Bag_of_Visual_Words/save_dir/"
+  std::string descriptors_and_key_points_file = "/home/sgunnam/wsp/CLionProjects/myBoW/data/save_dir/"
                                                 + data_set_name + ".yml.gz";
 
   if(read_images) {
@@ -235,11 +232,20 @@ void CheckCurrentHistogramCount(std::vector<T>& current_image_hist, const int& t
 
 std::vector<int> CreateTestImageHistogram(const cv::Mat& descriptors_test, const cv::Mat& centers, std::vector<int>& label_test);
 
+// Parameters that affect the result
+/*
+ * Dataset: images of objects only
+ * Number of centroids - runtime effect
+ * Number of descriptors from each image - runtime
+ * Thresholding logic - engineering effort
+ * Type of descriptors - SURF, SIFT
+ */
 int main(int ac, char** av){
   // read_images_from_disk  enable_debug_write_image
   // false        true
+  // Arguments to reuse the saved desc data: false false true
   cv::CommandLineParser parser(ac, av,"{@read_images||}{@enable_debug_write_images||}{@use_saved_labels_centers_hists||}");
-  auto read_images                    = parser.get<bool>("@read_images");
+  bool read_images                    = parser.get<bool>("@read_images");
   bool enable_debug_write_images      = parser.get<bool>("@enable_debug_write_images");
   bool use_saved_labels_centers_hists = parser.get<bool>( "@use_saved_labels_centers_hists");
 
@@ -249,7 +255,7 @@ int main(int ac, char** av){
 
   std::vector<std::vector<int>> all_hists;
   std::vector<std::vector<double>> all_hists_normalized;
-  const int kCentroids = 20;
+  const int kCentroids = 5;
   cv::Mat labels;
   cv::Mat centers;
   std::string fname_centers = "/home/sgunnam/wsp/CLionProjects/myBoW/data/save_dir/centers.yml.gz";
@@ -264,9 +270,13 @@ int main(int ac, char** av){
    * If the Keypoints and descriptors already exist, and if the read_option is "read_images" is false, then will read the
    * descriptors and keypoints from the previously generated results.
    */
-    std::string data_set_dir = "/home/sgunnam/wsp/CLionProjects/myBoW/data/myRoom/training";
+    std::string data_set_dir = "/home/sgunnam/wsp/CLionProjects/myBoW/data/myRoom/training/";
 
-    ProcessInputs(data_set_dir, read_images, list_of_descriptors, list_of_keypoints, file_list);
+    ProcessInputs(data_set_dir,
+      read_images,
+      list_of_descriptors,
+      list_of_keypoints,
+      file_list);
 
     cv::Mat all_descriptors;
     for (auto i : list_of_descriptors) {
@@ -414,10 +424,11 @@ int main(int ac, char** av){
     */
   }
 
-  std::string test_image_filename = "/home/sgunnam/wsp/CLionProjects/myBoW/data/myRoom/test_images/bottle.jpg";
+  std::string test_image_filename = "/home/sgunnam/wsp/CLionProjects/myBoW/data/myRoom/training/IMG_20200823_125045.jpg";
+  //"/home/sgunnam/wsp/CLionProjects/myBoW/data/colombia100Objs/testdata_coil100/obj6__0.png";
   cv::Mat im_test = cv::imread(test_image_filename);
   //showManyImages("an image in showMany images", 2, im_test, im_test);
-  auto detector_test = cv::SIFT::create(); //num_of_descriptor);
+  auto detector_test = cv::SIFT::create(10); //num_of_descriptor);
   std::vector<cv::KeyPoint> keypoints_test;
   cv::Mat descriptors_test;
   detector_test->detect(im_test, keypoints_test);
@@ -433,26 +444,40 @@ int main(int ac, char** av){
   std::cout << "Normalized Histogram = \n";
   std::for_each(test_hist_norm.begin(), test_hist_norm.end(), [&](auto &val){val = val/sum_test_hist; std::cout << val << ", "; });
   auto test_hist_norm_check_sum = std::accumulate(test_hist_norm.begin(), test_hist_norm.end(), 0.0);
-  assert(test_hist_norm_check_sum == 1);
+  //assert(test_hist_norm_check_sum == 1);
 
   PrintVecContainer("Before test_hist_norm", test_hist_norm);
   std::transform(test_hist_norm.begin(), test_hist_norm.end(), hist_tfidf_ni.cbegin(), test_hist_norm.begin(),
                  [](auto& first, const auto second){ first = first*second; return first; });
   PrintVecContainer("After test_hist_norm", test_hist_norm);
 
+  std::vector<double> ssd_vec(file_list.size(), 0.0);
+  std::size_t file_index = 0;
   for(auto c:costMatrix){
-    double ssd_test =  std::inner_product(c.begin(), c.end(), test_hist_norm.begin(), 0.0,
+    ssd_vec[file_index] =  std::inner_product(c.begin(), c.end(), test_hist_norm.begin(), 0.0,
                                                      std::plus<>(), [](auto&l, auto& r){ return std::pow((l-r),2);});
-    std::cout << "ssd_test = " << ssd_test << std::endl;
+    std::cout << "ssd_vec[" << file_index << "] = " << ssd_vec[file_index] << std::endl;
+    file_index++;
   }
 
-  int matchCount = 11;
-  std::vector<std::string> matching_files(matchCount);
-  //std::copy_n(file_list.begin(), 5, matching_files.begin());
-  for(auto i=0; i<matchCount; i++){
-    matching_files.at(i) = file_list.at(i);
+
+  PrintVecContainer("ssd_vec : ", ssd_vec);
+  auto ssd_vec_copy{ssd_vec};
+  std::sort(ssd_vec_copy.begin(), ssd_vec_copy.end());
+
+  std::vector<std::string> matching_files;
+  std::size_t file_index2 = 0;
+  for(auto s:ssd_vec){
+    if(s <= ssd_vec_copy[2]){
+      matching_files.push_back(file_list[file_index2]);
+    }
+    file_index2++;
   }
-  ShowManyImagesForBoVW("BoVW image matching", test_image_filename, matching_files);
+  //std::copy_n(file_list.begin(), 5, matching_files.begin());
+//  for(auto i=0; i<matchCount; i++){
+//    matching_files.at(i) = file_list.at(i);
+//  }
+  //ShowManyImagesForBoVW("BoVW image matching", test_image_filename, matching_files);
   return 0;
 }
 

@@ -51,7 +51,7 @@ add_subdirectory(experimental)
 
 # Generic test that uses conan libs
 add_executable(intro
-        main.cpp)
+        main.cpp experimental/BoVW.cpp experimental/BoVW.h)
 target_include_directories(intro PRIVATE experimental)
 target_link_libraries(intro
   PRIVATE bowStats
