@@ -61,8 +61,13 @@ void BoVW::ProcessInputs()
       cv::Mat descriptors;
       detector->detect(im, keypoints);
       detector->compute(im, keypoints, descriptors);
-      list_of_descriptors.push_back(descriptors);
-      list_of_keypoints.insert(list_of_keypoints.end(), keypoints.begin(), keypoints.end());
+      if(descriptors.rows == 0) {
+        std::cout << " descriptor count = 0 for image " << input_image << "\n";
+        training_images_to_skip.insert(input_image);
+      } else {
+        list_of_descriptors.push_back(descriptors);
+        list_of_keypoints.insert(list_of_keypoints.end(), keypoints.begin(), keypoints.end());
+      }
     }
     // Save descriptors to file
     {
@@ -125,8 +130,9 @@ void BoVW::CreateDictionary()
     auto keypoint_index = 0ul;
     auto current_image_desc_iter = list_of_descriptors.begin();
 
-
     for (const auto &file : training_file_list) {
+      if(training_images_to_skip.find(file) != training_images_to_skip.end())
+        continue;
       std::cout << "Generating histograms and debug images for image " << file << "\n";
       auto total_desc_in_image = (*current_image_desc_iter).rows;
       std::advance(current_image_desc_iter, 1);
@@ -167,6 +173,7 @@ void BoVW::CreateDictionary()
       all_hists_normalized.push_back(current_image_normalized_hist);
       all_hists.push_back(current_image_hist);
       CheckCurrentHistogramCount<double>(current_image_normalized_hist, total_desc_in_image);
+
     }
 
     // TFIDF
@@ -181,12 +188,20 @@ void BoVW::CreateDictionary()
                                         boVwParams_.dataset_name +
                                         boVwParams_.save_data_folder
                                         + "/";
+
+    for(auto skip_file:training_images_to_skip){
+      auto file_p = std::find(training_file_list.begin(), training_file_list.end(), skip_file);
+      if(file_p != training_file_list.end()){
+        training_file_list.erase(file_p);
+      }
+    }
     // Save all the centroids and histograms
     SaveToFile(save_data_path + NAME_OF(centers) + ".yml.gz", centers);
     SaveToFile(save_data_path + NAME_OF(labels) + ".yml.gz", labels);
     SaveToFile(save_data_path + NAME_OF(all_hists) + ".yml.gz", all_hists);
     SaveToFile(save_data_path + NAME_OF(all_hists_normalized) + ".yml.gz", all_hists_normalized);
     SaveToFile(save_data_path + NAME_OF(training_file_list) + ".yml.gz", training_file_list);
+    //SaveToFile(save_data_path + NAME_OF(training_images_to_skip) + ".yml.gz", training_images_to_skip);
   } else {
     std::string  save_data_path = boVwParams_.dataset_dir +
                                   boVwParams_.dataset_name +
@@ -200,6 +215,7 @@ void BoVW::CreateDictionary()
   }
 
   Stats<double> stats{ all_hists_normalized, training_file_list };
+
   auto all_mean = stats.getMean();
   hist_tfidf_ni.resize(all_hists_normalized[0].size(), 0);
   //TF-IDF
@@ -211,20 +227,17 @@ void BoVW::CreateDictionary()
     }
   }
 
-  PrintVecContainer("hist_tfidf_ni", hist_tfidf_ni);
+  //PrintVecContainer("hist_tfidf_ni", hist_tfidf_ni, 10);
   std::for_each(hist_tfidf_ni.begin(), hist_tfidf_ni.end(),
     [&](auto &first) {
       first = std::log( static_cast<double>(all_hists_normalized.size()) / first);
     });
-  PrintVecContainer("hist_tfidf_ni after log operation", hist_tfidf_ni);
+  //PrintVecContainer("hist_tfidf_ni after log operation", hist_tfidf_ni);
 
   for (auto &hi : all_hists_normalized) {
-    //std::cout << "----------------------------------------------------\n";
-    //PrintVecContainer("hi_before", hi, 7);
-    //PrintVecContainer("hist_tfidf_ni", hist_tfidf_ni, 7);
     std::transform(hi.begin(), hi.end(), hist_tfidf_ni.cbegin(), hi.begin(),
       [](auto &first, const auto second) { first = first*second; return first; });
-    PrintVecContainer("hi_after", hi, 7);
+    //PrintVecContainer("hi_after", hi, 7);
   }
 
   costMatrix.resize( all_hists_normalized.size(),
@@ -245,9 +258,6 @@ void BoVW::CreateDictionary()
     }
   }
 
-  for (auto &hi : all_hists_normalized) {
-    PrintVecContainer("hi_after", hi, 7);
-  }
 }
 
 
@@ -325,33 +335,31 @@ void BoVW::testBoVW()
     std::vector<double> test_hist_norm(test_hist.size());
     std::copy(test_hist.begin(), test_hist.end(), test_hist_norm.begin());
     auto sum_test_hist = std::accumulate(test_hist.begin(), test_hist.end(), 0ul);
-    std::cout << "Normalized Histogram = \n";
     std::for_each(
       test_hist_norm.begin(),
       test_hist_norm.end(),
       [&](auto &val) {
         val = val / static_cast<double>(sum_test_hist);
-        std::cout << val << ", ";
       });
     //auto test_hist_norm_check_sum = std::accumulate(test_hist_norm.begin(), test_hist_norm.end(), 0.0);
     //assert(test_hist_norm_check_sum == 1);
 
-    PrintVecContainer("Before test_hist_norm", test_hist_norm);
+    //PrintVecContainer("Before test_hist_norm", test_hist_norm);
     std::transform(test_hist_norm.begin(), test_hist_norm.end(), hist_tfidf_ni.cbegin(), test_hist_norm.begin(),
       [](auto &first, const auto second) { first = first*second; return first; });
-    PrintVecContainer("After test_hist_norm", test_hist_norm);
+    //PrintVecContainer("After test_hist_norm", test_hist_norm);
 
     std::vector<double> ssd_vec(training_file_list.size(), 0.0);
     std::size_t file_index = 0;
     for (auto hi : all_hists_normalized) {
       ssd_vec[file_index] = std::inner_product(hi.begin(), hi.end(), test_hist_norm.begin(), 0.0,
         std::plus<>(), [](auto &l, auto &r) { return std::pow((l - r), 2); });
-      std::cout << "ssd_vec[" << file_index << "] = " << ssd_vec[file_index] << std::endl;
+      //std::cout << "ssd_vec[" << file_index << "] = " << ssd_vec[file_index] << std::endl;
       file_index++;
     }
 
 
-    PrintVecContainer("ssd_vec : ", ssd_vec);
+    //PrintVecContainer("ssd_vec : ", ssd_vec);
     auto ssd_vec_copy{ ssd_vec };
     std::sort(ssd_vec_copy.begin(), ssd_vec_copy.end());
 

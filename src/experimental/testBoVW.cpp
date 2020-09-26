@@ -2,7 +2,6 @@
 // Created by sgunnam on 9/23/20.
 //
 #include "BoVW.h"
-
 int main(){
   BoVWParams boVwParams;
   /*{
@@ -18,6 +17,11 @@ int main(){
   BoVW b{boVwParams};
   return 0;
 }
+
+// TODO
+// 1) Read Images with exception
+// 2) Handle Zero descriptors for an image
+      //descriptor count = 0 for image /home/sgunnam/wsp/CLionProjects/myBoW/data/smallImagedataset/training/obj35__25.png
 
 /*
 ssd_vec[0] = 949.910

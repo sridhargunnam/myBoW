@@ -61,16 +61,16 @@ public:
       std::transform(hi.cbegin(), hi.cend(), all_sum.begin(), all_sum.begin(), [](const auto& first, auto& second){second += first; return second;} );
     }
 
-    PrintVecContainer<T>("all_sum", all_sum);
+    //PrintVecContainer<T>("all_sum", all_sum);
     all_mean_.resize(all_sum.size());
     std::copy(all_sum.begin(), all_sum.end(), all_mean_.begin());
     std::transform(all_mean_.begin(), all_mean_.end(), all_mean_.begin(), [&](const auto& first){return first/static_cast<T>(all_hists_normalized_.size());});
-    PrintVecContainer<T>("all_mean", all_mean_);
+    //PrintVecContainer<T>("all_mean", all_mean_);
 
-    auto sum_of_all_sum = std::accumulate(all_sum.cbegin(), all_sum.cend(), 0.0);
-    auto sum_of_all_mean = std::accumulate(all_mean_.cbegin(), all_mean_.cend(), 0.0);
-    std::cout << "Sum of all_sum  = " << sum_of_all_sum  << "\n";
-    std::cout << "Sum of all_mean = " << sum_of_all_mean << "\n";
+    //auto sum_of_all_sum = std::accumulate(all_sum.cbegin(), all_sum.cend(), 0.0);
+    //auto sum_of_all_mean = std::accumulate(all_mean_.cbegin(), all_mean_.cend(), 0.0);
+    //std::cout << "Sum of all_sum  = " << sum_of_all_sum  << "\n";
+    //std::cout << "Sum of all_mean = " << sum_of_all_mean << "\n";
 
     all_variance_.resize(all_hists_normalized_[0].size());
     std::fill(all_variance_.begin(), all_variance_.end(), 0);
@@ -89,7 +89,7 @@ public:
         [](const auto& first, auto& second) {second += first; return second;});
     }
     for_each(all_variance_.begin(), all_variance_.end(), [&](auto& val){val = sqrt( val/static_cast<T>(all_hists_normalized_.size() ));});
-    PrintVecContainer<T>("all_variance_", all_variance_);
+    //PrintVecContainer<T>("all_variance_", all_variance_);
 
   };
 

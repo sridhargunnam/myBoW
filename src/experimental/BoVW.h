@@ -16,6 +16,7 @@
 #include <fstream>
 #include <stdio.h>
 #include <stdarg.h>
+#include<unordered_set>
 
 #include <opencv2/opencv.hpp>
 #include <opencv2/highgui/highgui.hpp>
@@ -42,10 +43,11 @@ class BoVW
 {
 private:
   BoVWParams boVwParams_;
-  bool read_images = true;
+  bool read_images = false;
   bool enable_debug_write_images = false;
-  bool use_saved_labels_centers_hists = false;
+  bool use_saved_labels_centers_hists = true;
   std::vector<std::string> training_file_list;
+  std::unordered_set<std::string> training_images_to_skip;
   std::vector<std::string> testing_file_list;
   std::vector<cv::Mat> list_of_descriptors;
   std::vector<cv::KeyPoint> list_of_keypoints;
