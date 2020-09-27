@@ -32,11 +32,13 @@ struct BoVWParams
   std::size_t kCentroids = 30;
   std::size_t number_of_desc_per_image = 150;
   std::string dataset_dir = "/home/sgunnam/wsp/CLionProjects/myBoW/data";
-  std::string dataset_name = "/smallImagedataset"; //"/myRoom";
+  std::string dataset_name = "/smallImageMinimal"; // "/smallImagedataset"; //    //"/myRoom";
   std::string training_images_folder = "/training";
   std::string test_images_folder = "/test_images";
   std::string debug_images_folder = "/debug_images";
   std::string save_data_folder = "/save_dir";
+  bool parallel_algorithms = true;
+  bool include_TFIDF = true;
 } ;
 
 class BoVW
@@ -49,6 +51,8 @@ private:
   std::vector<std::string> training_file_list;
   std::unordered_set<std::string> training_images_to_skip;
   std::vector<std::string> testing_file_list;
+  std::vector<std::vector<cv::KeyPoint>> list_of_keypoints_seperately;
+  std::vector<cv::Mat> list_of_descriptors_seperately;
   std::vector<cv::Mat> list_of_descriptors;
   std::vector<cv::KeyPoint> list_of_keypoints;
   std::vector<std::vector<int>> all_hists;
@@ -57,6 +61,7 @@ private:
   cv::Mat centers;
   std::vector<double> hist_tfidf_ni;
   std::vector<std::vector<double>> costMatrix;
+  std::string save_dir_path;
 public:
   BoVW(BoVWParams& boVwParams);
 
@@ -64,6 +69,8 @@ private:
   void ProcessInputs();
   void CreateDictionary();
   void testBoVW();
+
+  void ProcessInputsParallel();
   static std::vector<std::size_t> CreateTestImageHistogram(
     const cv::Mat& descriptors_test,
     const cv::Mat& centers,
@@ -87,6 +94,7 @@ private:
 
   void ShowManyImagesForBoVW(const std::string& title, const std::string& test_image, const std::vector<std::string>& matching_images) ;
 
+  double ComputeAccuracy(const std::string& test_file, const std::vector<std::string>& matching_files);
   };
 
 

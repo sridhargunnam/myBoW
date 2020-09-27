@@ -3,15 +3,26 @@
 //
 
 #include "BoVW.h"
-
-namespace fs = std::filesystem;
+//namespace fs = std::filesystem;
 
 BoVW::BoVW(BoVWParams& boVwParams) : boVwParams_(boVwParams)
 {
-  ProcessInputs();
+  save_dir_path = boVwParams_.dataset_dir
+                              + boVwParams_.dataset_name
+                              + boVwParams_.save_data_folder
+                              + "/";
+
+  if(!boVwParams_.parallel_algorithms)
+  {
+    ProcessInputs();
+  } else
+  {
+    ProcessInputsParallel();
+  }
   CreateDictionary();
   testBoVW();
 }
+
 
 struct path_leaf_string
 {
@@ -36,23 +47,51 @@ void BoVW::ReadDirectory(std::string &data_set_path,
   std::cout << "\n";
 }
 
+#include <thread>
+void BoVW::ProcessInputsParallel()
+{
+  auto data_set_path = boVwParams_.dataset_dir + boVwParams_.dataset_name + boVwParams_.training_images_folder;
+  ReadDirectory(data_set_path, training_file_list);
+  assert(!training_file_list.empty());
+  list_of_descriptors_seperately.resize(training_file_list.size());
+  list_of_keypoints_seperately.resize(training_file_list.size());
+//  std::thread in
+  // TODO: Make reading files and adding descriptors multi threaded
+  // Preallocate the memory descriptors, and keypoints , so that there is no race condition
+  if (read_images) {
+    auto index = 0ul;
+    for (const auto &input_image : training_file_list) {
+      cv::Mat im = cv::imread(input_image);
+      auto detector = cv::SIFT::create(static_cast<int>(boVwParams_.number_of_desc_per_image));
+      detector->detect(im, list_of_keypoints_seperately.at(index));
+      detector->compute(im, list_of_keypoints_seperately.at(index), list_of_descriptors_seperately.at(index));
+      if (list_of_descriptors_seperately.at(index).rows == 0) {
+        std::cout << " descriptor count = 0 for image " << input_image << "\n";
+        training_images_to_skip.insert(input_image);
+      } else {
+        list_of_descriptors.push_back(list_of_descriptors_seperately.at(index));
+        list_of_keypoints.insert(list_of_keypoints.end(),
+                                 list_of_keypoints_seperately.at(index).begin(),
+                                 list_of_keypoints_seperately.at(index).end());
+      }
+    }
+    // Save descriptors to file
+    SaveToFile(save_dir_path + NAME_OF(list_of_descriptors) + ".yml.gz", list_of_descriptors);
+    SaveToFile(save_dir_path + NAME_OF(list_of_keypoints) + ".yml.gz", list_of_keypoints);
+  } else {
+    //read from file if it already exist
+    LoadFromFile(save_dir_path + NAME_OF(list_of_descriptors) + ".yml.gz", list_of_descriptors);
+    LoadFromFile(save_dir_path + NAME_OF(list_of_keypoints) + ".yml.gz", list_of_keypoints);
+  }
+}
+
 void BoVW::ProcessInputs()
 {
   auto data_set_path = boVwParams_.dataset_dir + boVwParams_.dataset_name + boVwParams_.training_images_folder;
   ReadDirectory(data_set_path, training_file_list);
   assert(!training_file_list.empty());
-  std::string save_dir_path = boVwParams_.dataset_dir +
-                              boVwParams_.dataset_name +
-                              boVwParams_.save_data_folder
-                              + "/";
-
-  std::string list_of_descriptors_filename = save_dir_path
-                                            + NAME_OF(list_of_descriptors) + ".yml.gz";
-  std::string list_of_keypoints_filename = save_dir_path
-                                             + NAME_OF(list_of_keypoints) + ".yml.gz";
-
   // TODO: Make reading files and adding descriptors multi threaded
-  // Preallocate the memory desctiptors, and keypoints , so that there is no race condition
+  // Preallocate the memory descriptors, and keypoints , so that there is no race condition
   if(read_images) {
     for (const auto& input_image : training_file_list) {
       cv::Mat im = cv::imread(input_image);
@@ -70,34 +109,12 @@ void BoVW::ProcessInputs()
       }
     }
     // Save descriptors to file
-    {
-      // Create the file, as cv::FileStorage doesn't create one
-      CreateFile(list_of_descriptors_filename);
-      CreateFile(list_of_keypoints_filename);
-      cv::FileStorage fs_desc(list_of_descriptors_filename, cv::FileStorage::WRITE);
-      cv::FileStorage fs_keys(list_of_keypoints_filename, cv::FileStorage::WRITE);
-      fs_desc << "list_of_descriptors" << list_of_descriptors;
-      fs_keys << "list_of_keypoints" << list_of_keypoints;
-    }
-  }   else {
+    SaveToFile(save_dir_path + NAME_OF(list_of_descriptors) + ".yml.gz", list_of_descriptors);
+    SaveToFile(save_dir_path + NAME_OF(list_of_keypoints) + ".yml.gz", list_of_keypoints);
+  } else {
     //read from file if it already exist
-    {
-      if(!fs::exists(list_of_descriptors_filename) || !fs::exists(list_of_keypoints_filename)){
-        std::cout << list_of_descriptors_filename <<
-                    "or " <<  list_of_keypoints_filename << "does not exist\n";
-        exit(0);
-      }
-
-      cv::FileStorage fs_desc(list_of_descriptors_filename, cv::FileStorage::READ);
-      cv::FileStorage fs_keys(list_of_keypoints_filename, cv::FileStorage::READ);
-      if (!fs_desc.isOpened() || !fs_keys.isOpened()) {
-        std::cerr << "failed to open " <<  list_of_descriptors_filename << "or "
-                  << list_of_keypoints_filename << std::endl;
-        exit(0);
-      }
-      fs_desc["list_of_descriptors"] >> list_of_descriptors;
-      fs_keys["list_of_keypoints"] >> list_of_keypoints;
-    }
+    LoadFromFile(save_dir_path + NAME_OF(list_of_descriptors) + ".yml.gz", list_of_descriptors);
+    LoadFromFile(save_dir_path + NAME_OF(list_of_keypoints) + ".yml.gz", list_of_keypoints);
   }
 }
 
@@ -133,7 +150,7 @@ void BoVW::CreateDictionary()
     for (const auto &file : training_file_list) {
       if(training_images_to_skip.find(file) != training_images_to_skip.end())
         continue;
-      std::cout << "Generating histograms and debug images for image " << file << "\n";
+      //std::cout << "Generating histograms and debug images for image " << file << "\n";
       auto total_desc_in_image = (*current_image_desc_iter).rows;
       std::advance(current_image_desc_iter, 1);
       std::advance(label_iterator_end, total_desc_in_image);
@@ -172,46 +189,37 @@ void BoVW::CreateDictionary()
       }
       all_hists_normalized.push_back(current_image_normalized_hist);
       all_hists.push_back(current_image_hist);
-      CheckCurrentHistogramCount<double>(current_image_normalized_hist, total_desc_in_image);
+      //CheckCurrentHistogramCount<double>(current_image_normalized_hist, total_desc_in_image);
 
     }
 
-    // TFIDF
-    for (auto hist : all_hists_normalized) {
+    // TFIDF checks
+    //for (auto hist : all_hists_normalized) {
       //std::sort(hist.begin(), hist.end());
-      auto mean = std::accumulate(hist.begin(), hist.end(), 0.0) / static_cast<double>(hist.size());
-      std::cout << "Mean:" << mean << std::endl;
-      CheckCurrentHistogramCount<double>(hist, 1);
-    }
+      //auto mean = std::accumulate(hist.begin(), hist.end(), 0.0) / static_cast<double>(hist.size());
+      //std::cout << "Mean:" << mean << std::endl;
+      //CheckCurrentHistogramCount<double>(hist, 1);
+    //}
 
-    std::string  save_data_path = boVwParams_.dataset_dir +
-                                        boVwParams_.dataset_name +
-                                        boVwParams_.save_data_folder
-                                        + "/";
-
-    for(auto skip_file:training_images_to_skip){
+    for(const auto& skip_file:training_images_to_skip){
       auto file_p = std::find(training_file_list.begin(), training_file_list.end(), skip_file);
       if(file_p != training_file_list.end()){
         training_file_list.erase(file_p);
       }
     }
     // Save all the centroids and histograms
-    SaveToFile(save_data_path + NAME_OF(centers) + ".yml.gz", centers);
-    SaveToFile(save_data_path + NAME_OF(labels) + ".yml.gz", labels);
-    SaveToFile(save_data_path + NAME_OF(all_hists) + ".yml.gz", all_hists);
-    SaveToFile(save_data_path + NAME_OF(all_hists_normalized) + ".yml.gz", all_hists_normalized);
-    SaveToFile(save_data_path + NAME_OF(training_file_list) + ".yml.gz", training_file_list);
+    SaveToFile(save_dir_path + NAME_OF(centers) + ".yml.gz", centers);
+    SaveToFile(save_dir_path + NAME_OF(labels) + ".yml.gz", labels);
+    SaveToFile(save_dir_path + NAME_OF(all_hists) + ".yml.gz", all_hists);
+    SaveToFile(save_dir_path + NAME_OF(all_hists_normalized) + ".yml.gz", all_hists_normalized);
+    SaveToFile(save_dir_path + NAME_OF(training_file_list) + ".yml.gz", training_file_list);
     //SaveToFile(save_data_path + NAME_OF(training_images_to_skip) + ".yml.gz", training_images_to_skip);
   } else {
-    std::string  save_data_path = boVwParams_.dataset_dir +
-                                  boVwParams_.dataset_name +
-                                  boVwParams_.save_data_folder
-                                  + "/";
-    LoadFromFile(save_data_path + NAME_OF(centers) + ".yml.gz", centers);
-    LoadFromFile(save_data_path + NAME_OF(labels) + ".yml.gz", labels );
-    LoadFromFile(save_data_path + NAME_OF(all_hists) + ".yml.gz", all_hists );
-    LoadFromFile(save_data_path + NAME_OF(all_hists_normalized) + ".yml.gz", all_hists_normalized);
-    LoadFromFile(save_data_path + NAME_OF(training_file_list) + ".yml.gz", training_file_list);
+    LoadFromFile(save_dir_path + NAME_OF(centers) + ".yml.gz", centers);
+    LoadFromFile(save_dir_path + NAME_OF(labels) + ".yml.gz", labels );
+    LoadFromFile(save_dir_path + NAME_OF(all_hists) + ".yml.gz", all_hists );
+    LoadFromFile(save_dir_path + NAME_OF(all_hists_normalized) + ".yml.gz", all_hists_normalized);
+    LoadFromFile(save_dir_path + NAME_OF(training_file_list) + ".yml.gz", training_file_list);
   }
 
   Stats<double> stats{ all_hists_normalized, training_file_list };
@@ -227,13 +235,14 @@ void BoVW::CreateDictionary()
     }
   }
 
-  //PrintVecContainer("hist_tfidf_ni", hist_tfidf_ni, 10);
-  std::for_each(hist_tfidf_ni.begin(), hist_tfidf_ni.end(),
-    [&](auto &first) {
-      first = std::log( static_cast<double>(all_hists_normalized.size()) / first);
-    });
-  //PrintVecContainer("hist_tfidf_ni after log operation", hist_tfidf_ni);
-
+  if(boVwParams_.include_TFIDF) {
+    //PrintVecContainer("hist_tfidf_ni", hist_tfidf_ni, 10);
+    std::for_each(hist_tfidf_ni.begin(), hist_tfidf_ni.end(),
+      [&](auto &first) {
+        first = std::log(static_cast<double>(all_hists_normalized.size()) / first);
+      });
+    //PrintVecContainer("hist_tfidf_ni after log operation", hist_tfidf_ni);
+  }
   for (auto &hi : all_hists_normalized) {
     std::transform(hi.begin(), hi.end(), hist_tfidf_ni.cbegin(), hi.begin(),
       [](auto &first, const auto second) { first = first*second; return first; });
@@ -295,19 +304,25 @@ void BoVW::CheckCurrentHistogramCount(std::vector<T>& current_image_hist,
 void BoVW::CreateFile(const std::string &file_name)
 {
   std::ofstream ostrm(file_name);
-  fs::permissions(file_name,
-                  fs::perms::owner_all | fs::perms::group_all,
-                  fs::perm_options::add);
+  std::filesystem::permissions(file_name,
+                  std::filesystem::perms::owner_all | std::filesystem::perms::group_all,
+                  std::filesystem::perm_options::add);
 }
 
 template<typename T>
 void BoVW::SaveToFile(const std::string& filename, T item){
+  // Create the file, as cv::FileStorage doesn't create one
+  CreateFile(filename);
   cv::FileStorage fs(filename, cv::FileStorage::WRITE);
   fs << "item" << item;
 }
 
 template<typename T>
 void BoVW::LoadFromFile(const std::string& filename, T& item){
+  if(!std::filesystem::exists(filename) ){
+    std::cout << filename << "does not exist\n";
+    exit(0);
+  }
   cv::FileStorage fs(filename, cv::FileStorage::READ);
   fs["item"] >> item;
 }
@@ -319,6 +334,7 @@ void BoVW::testBoVW()
   //std::string test_image_filename = "/home/sgunnam/wsp/CLionProjects/myBoW/data/colombia100Objs/testdata_coil100/obj6__0.png";
   auto data_set_path = boVwParams_.dataset_dir + boVwParams_.dataset_name + boVwParams_.test_images_folder;
   ReadDirectory(data_set_path, testing_file_list);
+  double mean_accuracy = 0;
   for (const auto &test_file : testing_file_list) {
     cv::Mat im_test = cv::imread(test_file);
     auto detector_test = cv::SIFT::create(static_cast<int>(boVwParams_.number_of_desc_per_image));
@@ -371,14 +387,14 @@ void BoVW::testBoVW()
       }
       file_index2++;
     }
-    //std::copy_n(file_list.begin(), 5, matching_files.begin());
-    //  for(auto i=0; i<matchCount; i++){
-    //    matching_files.at(i) = file_list.at(i);
-    //  }
-    ShowManyImagesForBoVW("BoVW image matching", test_file, matching_files);
+
+    // Compare test image with matching image
+    mean_accuracy += ComputeAccuracy(test_file, matching_files);
+    //ShowManyImagesForBoVW("BoVW image matching", test_file, matching_files);
     std::cout << "completed processing test image " << test_file << std::endl;
-//    exit(0);
   }
+    std::cout << "Average mean accuracy of dataset " << boVwParams_.dataset_name << " = "
+    <<  mean_accuracy / static_cast<double>(testing_file_list.size()) << "\n";
 }
 
 std::vector<std::size_t> BoVW::CreateTestImageHistogram(const cv::Mat& descriptors_test, const cv::Mat& centers, std::vector<std::size_t>& label_test){
@@ -567,4 +583,25 @@ void BoVW::ShowManyImagesForBoVW(const std::string& title, const std::string& te
   namedWindow( title, 1 );
   imshow( title, DispImage);
   waitKey();
+}
+
+double BoVW::ComputeAccuracy(const std::string& test_file, const std::vector<std::string>& matching_files)
+{
+  auto total_images = matching_files.size();
+  auto total_matches = 0;
+
+  std::filesystem::path pt(test_file);
+  auto test_file_name = pt.filename().string();
+
+  for(const auto& m : matching_files){
+    std::filesystem::path p(m);
+    auto matching_file_name = p.filename().string();
+    if( matching_file_name.substr(3,2) == (test_file_name.substr(3,2)) ) {
+      total_matches++;
+    }
+  }
+  auto result = static_cast<double>(total_matches)/static_cast<double>(total_images);
+  std::cout << "Accuracy for image " << test_file_name << " is " << std::endl <<
+            result << std::endl;
+  return result;
 }
